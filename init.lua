@@ -224,6 +224,19 @@ if not (vim.uv or vim.loop).fs_stat(lazypath) then
 end ---@diagnostic disable-next-line: undefined-field
 vim.opt.rtp:prepend(lazypath)
 
+-- Setting for Markdown Preview
+-- For WSL users
+vim.g.mkdp_open_to_the_world = 1 -- Important for WSL
+vim.g.mkdp_echo_preview_url = 1 -- Shows the URL when you run the command
+vim.g.mkdp_browserfunc = 'OpenMarkdownPreview'
+
+vim.cmd [[
+  function! OpenMarkdownPreview(url)
+    execute "silent! !wslview " . shellescape(a:url,1)
+    return
+  endfunction
+]]
+
 -- [[ Configure and install plugins ]]
 --
 --  To check the current status of your plugins, run
