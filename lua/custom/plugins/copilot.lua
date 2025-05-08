@@ -8,9 +8,9 @@ return {
       enabled = not vim.g.ai_cmp,
       auto_trigger = true,
       keymap = {
-        accept = '<C-y>', -- handled by nvim-cmp / blink.cmp
-        next = '<C-n>',
-        prev = '<C-p>',
+        accept = '<C-y>',
+        next = '<M-]>',
+        prev = '<M-[>',
       },
     },
     panel = { enabled = true },
@@ -20,6 +20,10 @@ return {
       python = true,
       lua = true,
       yaml = true,
+      javascript = true,
+      typescript = true,
+      rust = true,
+      go = true,
     },
   },
 }
