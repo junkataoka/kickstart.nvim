@@ -8,9 +8,9 @@ return {
       enabled = not vim.g.ai_cmp,
       auto_trigger = true,
       keymap = {
-        accept = '<Tab>', -- handled by nvim-cmp / blink.cmp
-        next = '<M-]>',
-        prev = '<M-[>',
+        accept = '<C-y>', -- handled by nvim-cmp / blink.cmp
+        next = '<C-n>',
+        prev = '<C-p>',
       },
     },
     panel = { enabled = true },

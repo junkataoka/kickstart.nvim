@@ -19,7 +19,7 @@ return {
       },
     },
     filesystem = {
-      follow_current_file = { enbaled = true },
+      follow_current_file = { enabled = true },
       filtered_items = {
         visible = false,
         hide_dotfiles = false,
