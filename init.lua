@@ -703,7 +703,7 @@ require('lazy').setup({
 
   { -- Autoformat
     'stevearc/conform.nvim',
-    event = { 'BufWritePre' },
+    event = { 'BufWritePre', 'BufRead', 'BufNewFile' },
     cmd = { 'ConformInfo' },
     keys = {
       {
@@ -736,7 +736,7 @@ require('lazy').setup({
       formatters_by_ft = {
         lua = { 'stylua' },
         python = { 'black', 'isort' },
-        markdown = { 'markdownlint' },
+        markdown = { 'markdownlint', 'prettier' },
         -- Conform can also run multiple formatters sequentially
         -- python = { "isort", "black" },
         --
