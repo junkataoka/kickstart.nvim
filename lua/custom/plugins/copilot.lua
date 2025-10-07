@@ -13,7 +13,13 @@ return {
         prev = '<M-[>',
       },
     },
-    panel = { enabled = true },
+    panel = {
+      enabled = true,
+      auto_refresh = false,
+      keymap = {
+        open = '<M-p>',
+      },
+    },
     filetypes = {
       markdown = true,
       help = true,

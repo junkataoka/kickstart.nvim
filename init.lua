@@ -13,6 +13,9 @@ vim.api.nvim_create_autocmd({ 'BufEnter', 'CursorHold', 'CursorHoldI', 'FocusGai
   pattern = { '*' },
 })
 
+-- Spell checking
+vim.o.spell = true
+vim.o.spelllang = 'en_us'
 -- Set to true if you have a Nerd Font installed and selected in the terminal
 vim.g.have_nerd_font = true
 
@@ -171,8 +174,8 @@ require('lazy').setup({
   -- keys can be used to configure plugin behavior/loading/etc.
   --
   -- Use `opts = {}` to force a plugin to be loaded.
-  --
-
+  -- Enable `hererocks` to use the `hererocks` plugin manager
+  rocks = { enabled = true, hererocks = true },
   -- Here is a more advanced example where we pass configuration
   -- options to `gitsigns.nvim`. This is equivalent to the following Lua:
   --    require('gitsigns').setup({ ... })
@@ -444,6 +447,7 @@ require('lazy').setup({
       --    That is to say, every time a new file is opened that is associated with
       --    an lsp (for example, opening `main.rs` is associated with `rust_analyzer`) this
       --    function will be executed to configure the current buffer
+
       vim.api.nvim_create_autocmd('LspAttach', {
         group = vim.api.nvim_create_augroup('kickstart-lsp-attach', { clear = true }),
         callback = function(event)
@@ -542,7 +546,26 @@ require('lazy').setup({
         for type, icon in pairs(signs) do
           diagnostic_signs[vim.diagnostic.severity[type]] = icon
         end
-        vim.diagnostic.config { signs = { text = diagnostic_signs } }
+        vim.diagnostic.config {
+          signs = { text = diagnostic_signs },
+          virtual_text = true, -- Show inline diagnostic messages
+          underline = true, -- Underline problematic code
+          update_in_insert = false, -- Don't update while typing
+          severity_sort = true, -- Sort by severity
+          float = {
+            scope = 'line',
+            border = 'rounded',
+            source = true, -- Show source of diagnostic message
+            header = '',
+            prefix = '',
+          },
+        }
+        vim.o.updatetime = 250
+        vim.api.nvim_create_autocmd('CursorHold', {
+          callback = function()
+            vim.diagnostic.open_float(nil, { focus = false })
+          end,
+        })
       end
 
       -- LSP servers and clients are able to communicate to each other what features they support.

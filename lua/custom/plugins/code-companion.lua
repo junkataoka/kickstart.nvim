@@ -3,6 +3,7 @@ return {
   dependencies = {
     'nvim-lua/plenary.nvim',
     'nvim-treesitter/nvim-treesitter',
+    'lalitmee/codecompanion-spinners.nvim',
   },
   opts = {
     -- Set debug logging
@@ -33,6 +34,38 @@ return {
       },
       agent = {
         adapter = 'copilot',
+      },
+    },
+
+    -- Extensions configuration
+    extensions = {
+      spinner = {
+        opts = {
+          style = 'cursor-relative',
+        },
+      },
+    },
+
+    -- Display configuration (ADD THIS HERE)
+    display = {
+      chat = {
+        intro_message = 'Welcome to CodeCompanion ✨!',
+        separator = '─',
+        show_context = true,
+        show_header_separator = false,
+        show_settings = false,
+        show_token_count = true,
+        start_in_insert_mode = false,
+
+        -- Customize icons
+        icons = {
+          chat_context = '📎️',
+          chat_fold = ' ',
+        },
+
+        -- Fold context for cleaner look
+        fold_context = true,
+        fold_reasoning = true,
       },
     },
   },
