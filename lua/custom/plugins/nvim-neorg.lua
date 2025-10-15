@@ -19,7 +19,6 @@ return {
                 -- If true will only dim the content of the code block (without the
                 -- `@code` and `@end` lines), not the entirety of the code block itself.
                 content_only = true,
-
                 -- The width to use for code block backgrounds.
                 --
                 -- When set to `fullwidth` (the default), will create a background
@@ -28,7 +27,6 @@ return {
                 -- When set to `content`, will only span as far as the longest line
                 -- within the code block.
                 width = 'content',
-
                 -- Additional padding to apply to either the left or the right. Making
                 -- these values negative is considered undefined behaviour (it is
                 -- likely to work, but it's not officially supported).
@@ -36,11 +34,9 @@ return {
                   -- left = 20,
                   -- right = 20,
                 },
-
                 -- If `true` will conceal (hide) the `@code` and `@end` portion of the code
                 -- block.
                 conceal = true,
-
                 nodes = { 'ranged_verbatim_tag' },
                 highlight = 'CursorLine',
                 -- render = module.public.icon_renderers.render_code_block,
@@ -64,5 +60,14 @@ return {
     }
     vim.wo.foldlevel = 99
     vim.wo.conceallevel = 2
+    -- Fix indentation issues with code blocks
+    vim.api.nvim_create_autocmd('FileType', {
+      pattern = 'norg',
+      callback = function()
+        vim.opt_local.indentexpr = ''
+        vim.opt_local.autoindent = true
+        vim.opt_local.smartindent = true
+      end,
+    })
   end,
 }
