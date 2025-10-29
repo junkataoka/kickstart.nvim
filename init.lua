@@ -500,6 +500,8 @@ require('lazy').setup({
           -- WARN: This is not Goto Definition, this is Goto Declaration.
           --  For example, in C this would take you to the header.
           map('gD', vim.lsp.buf.declaration, '[G]oto [D]eclaration')
+          -- Open floating window with the documentation of the word under your cursor
+          map('<leader>e', vim.diagnostic.open_float, 'Open [E]rror')
 
           -- The following two autocommands are used to highlight references of the
           -- word under your cursor when your cursor rests there for a little while.
@@ -563,12 +565,6 @@ require('lazy').setup({
             prefix = '',
           },
         }
-        vim.o.updatetime = 250
-        vim.api.nvim_create_autocmd('CursorHold', {
-          callback = function()
-            vim.diagnostic.open_float(nil, { focus = false })
-          end,
-        })
       end
 
       -- LSP servers and clients are able to communicate to each other what features they support.

@@ -16,36 +16,23 @@ return {
                 },
               },
               code_block = {
-                -- If true will only dim the content of the code block (without the
-                -- `@code` and `@end` lines), not the entirety of the code block itself.
                 content_only = true,
-                -- The width to use for code block backgrounds.
-                --
-                -- When set to `fullwidth` (the default), will create a background
-                -- that spans the width of the buffer.
-                --
-                -- When set to `content`, will only span as far as the longest line
-                -- within the code block.
                 width = 'content',
-                -- Additional padding to apply to either the left or the right. Making
-                -- these values negative is considered undefined behaviour (it is
-                -- likely to work, but it's not officially supported).
-                padding = {
-                  -- left = 20,
-                  -- right = 20,
-                },
-                -- If `true` will conceal (hide) the `@code` and `@end` portion of the code
-                -- block.
+                padding = {},
                 conceal = true,
                 nodes = { 'ranged_verbatim_tag' },
                 highlight = 'CursorLine',
-                -- render = module.public.icon_renderers.render_code_block,
                 insert_enabled = true,
               },
             },
           },
         },
         ['core.integrations.treesitter'] = {},
+        ['core.esupports.indent'] = {
+          config = {
+            enabled = false,
+          },
+        },
         ['core.dirman'] = {
           config = {
             workspaces = {
@@ -58,15 +45,21 @@ return {
         ['core.itero'] = {},
       },
     }
-    vim.wo.foldlevel = 99
-    vim.wo.conceallevel = 2
-    -- Fix indentation issues with code blocks
+
+    -- Use BufEnter with defer to override neorg's indentexpr after it loads
     vim.api.nvim_create_autocmd('FileType', {
-      pattern = 'norg',
+      pattern = '*.norg',
       callback = function()
-        vim.opt_local.indentexpr = ''
-        vim.opt_local.autoindent = true
-        vim.opt_local.smartindent = true
+        vim.wo.foldlevel = 99
+        vim.opt_local.conceallevel = 2
+        vim.opt_local.concealcursor = ''
+
+        -- Defer to ensure it runs after neorg sets its indentexpr
+        vim.schedule(function()
+          vim.opt_local.indentexpr = ''
+          vim.opt_local.autoindent = false
+          vim.opt_local.smartindent = false
+        end)
       end,
     })
   end,

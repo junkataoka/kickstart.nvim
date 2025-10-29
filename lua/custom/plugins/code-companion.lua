@@ -3,7 +3,6 @@ return {
   dependencies = {
     'nvim-lua/plenary.nvim',
     'nvim-treesitter/nvim-treesitter',
-    'lalitmee/codecompanion-spinners.nvim',
   },
   opts = {
     -- Set debug logging
@@ -16,7 +15,7 @@ return {
           return require('codecompanion.adapters').extend('copilot', {
             schema = {
               model = {
-                default = 'claude-sonnet-4.5',
+                default = 'claude-sonnet-4',
               },
             },
           })
@@ -34,15 +33,6 @@ return {
       },
       agent = {
         adapter = 'copilot',
-      },
-    },
-
-    -- Extensions configuration
-    extensions = {
-      spinner = {
-        opts = {
-          style = 'cursor-relative',
-        },
       },
     },
 
