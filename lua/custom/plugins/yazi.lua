@@ -20,6 +20,12 @@ return {
       desc = "Open the file manager in nvim's working directory",
     },
     {
+      -- Open in the project root (requires project.nvim)
+      '<leader>p\\',
+      '<cmd>ProjectRoot | Yazi cwd<cr>',
+      desc = 'Open yazi in project root',
+    },
+    {
       '<leader>\\',
       '<cmd>Yazi toggle<cr>',
       desc = 'Resume the last yazi session',

@@ -67,7 +67,7 @@ return {
       end
       vim.diagnostic.config {
         signs = { text = diagnostic_signs },
-        virtual_text = true,
+        virtual_text = { current_line = true },
         underline = true,
         update_in_insert = false,
         severity_sort = true,
@@ -91,6 +91,14 @@ return {
             completion = {
               callSnippet = 'Replace',
             },
+          },
+        },
+      },
+      pyright = {
+        settings = {
+          python = {
+            venvPath = vim.fn.getcwd(),
+            venv = '.venv',
           },
         },
       },
