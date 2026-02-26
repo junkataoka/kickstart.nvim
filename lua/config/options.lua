@@ -68,3 +68,13 @@ vim.opt.cursorline = true
 
 -- Scroll offset
 vim.opt.scrolloff = 10
+
+-- Enable line wrapping
+vim.opt.wrap = true
+
+-- Ensure a Neovim server for lazygit edits
+if vim.v.servername == '' then
+  local server = string.format('%s/nvim-%d.sock', vim.fn.stdpath('cache'), vim.fn.getpid())
+  vim.fn.serverstart(server)
+end
+vim.env.NVIM = vim.v.servername

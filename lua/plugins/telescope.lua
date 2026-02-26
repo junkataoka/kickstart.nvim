@@ -18,6 +18,18 @@ return {
   config = function()
     require('telescope').setup {
       defaults = {
+        vimgrep_arguments = {
+          'rg',
+          '--color=never',
+          '--no-heading',
+          '--with-filename',
+          '--line-number',
+          '--column',
+          '--smart-case',
+          '--hidden',
+          '--glob',
+          '!.git/*',
+        },
         mappings = {
           i = {
             ['<C-x>'] = require('telescope.actions').delete_buffer,
@@ -25,6 +37,11 @@ return {
           n = {
             ['dd'] = require('telescope.actions').delete_buffer,
           },
+        },
+      },
+      pickers = {
+        find_files = {
+          hidden = true,
         },
       },
       extensions = {
