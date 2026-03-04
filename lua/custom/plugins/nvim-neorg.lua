@@ -25,6 +25,7 @@ return {
             index = 'index.norg',
           },
         },
+        ['core.qol.todo_items'] = {},
       },
     }
 
@@ -34,6 +35,19 @@ return {
       callback = function()
         vim.opt_local.conceallevel = 2
         vim.opt_local.concealcursor = ''
+
+        -- Task status keybindings (buffer-local to .norg files)
+        local opts = function(desc)
+          return { buffer = true, desc = desc }
+        end
+        vim.keymap.set('n', '<leader>td', '<Plug>(neorg.qol.todo-items.todo.task-done)', opts '[T]ask [D]one')
+        vim.keymap.set('n', '<leader>tu', '<Plug>(neorg.qol.todo-items.todo.task-undone)', opts '[T]ask [U]ndone')
+        vim.keymap.set('n', '<leader>tp', '<Plug>(neorg.qol.todo-items.todo.task-pending)', opts '[T]ask [P]ending')
+        vim.keymap.set('n', '<leader>tq', '<Plug>(neorg.qol.todo-items.todo.task-ambiguous)', opts '[T]ask Uncertain [?]')
+        vim.keymap.set('n', '<leader>ti', '<Plug>(neorg.qol.todo-items.todo.task-important)', opts '[T]ask [I]mportant/Urgent')
+        vim.keymap.set('n', '<leader>to', '<Plug>(neorg.qol.todo-items.todo.task-on-hold)', opts '[T]ask [O]n Hold')
+        vim.keymap.set('n', '<leader>tc', '<Plug>(neorg.qol.todo-items.todo.task-cancelled)', opts '[T]ask [C]ancelled')
+        vim.keymap.set('n', '<leader>tt', '<Plug>(neorg.qol.todo-items.todo.task-cycle)', opts '[T]ask Cycle [T]oggle')
       end,
     })
 
@@ -297,19 +311,19 @@ return {
         if line:match '^%* Meetings' then
           -- Find existing meeting placeholder or next section
           for j = i + 1, #lines do
-            if lines[j]:match '^%*%* Meeting:' then
-              -- Replace the placeholder
+            if lines[j]:match '^%*%* ' then
+              -- Found existing meeting sub-heading, replace all meetings
               insert_line = j
-              -- Find end of placeholder (next section or empty ** header)
+              -- Find end of all meetings (next top-level section)
               local end_line = j
               for k = j + 1, #lines do
-                if lines[k]:match '^%* ' or lines[k]:match '^%*%* ' then
+                if lines[k]:match '^%* ' then
                   end_line = k - 1
                   break
                 end
                 end_line = k
               end
-              -- Remove placeholder lines
+              -- Remove all existing meeting lines
               vim.api.nvim_buf_set_lines(0, j - 1, end_line, false, {})
               break
             elseif lines[j]:match '^%* ' then
@@ -331,20 +345,23 @@ return {
       return false
     end
 
-    -- Fetch meetings from Outlook for Mac via AppleScript
+    -- Fetch meetings from Outlook via WorkIQ (opencode bridge)
     vim.api.nvim_create_user_command('NeorgMeetings', function(opts)
       local date = opts.args ~= '' and opts.args or os.date '%Y-%m-%d'
-      local script_path = vim.fn.expand '~/notes/.scripts/fetch_meetings.sh'
+      local script_path = vim.fn.expand '~/notes/.scripts/fetch_meetings_workiq.sh'
 
       if vim.fn.filereadable(script_path) ~= 1 then
         vim.notify('Meetings script not found: ' .. script_path, vim.log.levels.ERROR)
         return
       end
 
-      vim.notify('Fetching meetings for ' .. date .. '...', vim.log.levels.INFO)
+      vim.notify('Fetching meetings for ' .. date .. ' (this takes ~60-90s)...', vim.log.levels.INFO)
 
-      -- Run the AppleScript-based shell script asynchronously
-      vim.fn.jobstart({ script_path, date }, {
+      local timeout_ms = 240000 -- 4 minute timeout (MCP calls can be slow)
+      local job_done = false
+
+      -- Run the WorkIQ bridge script asynchronously
+      local job_id = vim.fn.jobstart({ script_path, date }, {
         stdout_buffered = true,
         stderr_buffered = true,
         on_stdout = function(_, data)
@@ -383,10 +400,28 @@ return {
             end)
           end
         end,
+        on_exit = function(_, exit_code)
+          job_done = true
+          if exit_code ~= 0 then
+            vim.schedule(function()
+              vim.notify('Meetings fetch exited with code ' .. exit_code, vim.log.levels.WARN)
+            end)
+          end
+        end,
       })
+
+      -- Timeout: kill the job if it takes too long
+      if job_id > 0 then
+        vim.defer_fn(function()
+          if not job_done then
+            vim.fn.jobstop(job_id)
+            vim.notify('Meetings fetch timed out after ' .. (timeout_ms / 1000) .. 's', vim.log.levels.ERROR)
+          end
+        end, timeout_ms)
+      end
     end, {
       nargs = '?',
-      desc = 'Fetch meetings from Outlook for today or specified date',
+      desc = 'Fetch meetings from Outlook via WorkIQ for today or specified date',
       complete = function()
         return { os.date '%Y-%m-%d' }
       end,

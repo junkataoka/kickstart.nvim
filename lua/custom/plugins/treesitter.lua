@@ -20,12 +20,13 @@ return {
         'vim',
         'vimdoc',
       },
-      auto_install = true,
+      auto_install = false, -- disabled: latex parser fails to compile; install manually with :TSInstall
       highlight = {
         enable = true,
-        additional_vim_regex_highlighting = { 'ruby' },
+        disable = { 'latex' }, -- vimtex handles LaTeX highlighting
+        additional_vim_regex_highlighting = { 'ruby', 'latex' },
       },
-      indent = { enable = true, disable = { 'ruby' } },
+      indent = { enable = true, disable = { 'ruby', 'latex' } },
 
       -- Incremental selection
       incremental_selection = {
