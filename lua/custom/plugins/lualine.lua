@@ -2,8 +2,18 @@
 return {
   {
     'nvim-lualine/lualine.nvim',
+    event = 'VeryLazy',
     dependencies = { 'nvim-tree/nvim-web-devicons' },
     config = function()
+      -- Python venv indicator
+      local function python_venv()
+        local venv = os.getenv 'VIRTUAL_ENV'
+        if venv then
+          return ' ' .. vim.fn.fnamemodify(venv, ':t')
+        end
+        return ''
+      end
+
       require('lualine').setup {
         options = {
           theme = 'tokyonight',
@@ -14,7 +24,12 @@ return {
           lualine_a = { 'mode' },
           lualine_b = { 'branch', 'diff', 'diagnostics' },
           lualine_c = { 'filename' },
-          lualine_x = { 'encoding', 'fileformat', 'filetype' },
+          lualine_x = {
+            { python_venv, cond = function() return vim.bo.filetype == 'python' end },
+            'encoding',
+            'fileformat',
+            'filetype',
+          },
           lualine_y = { 'progress' },
           lualine_z = { 'location' },
         },
@@ -24,6 +39,7 @@ return {
   },
   {
     'akinsho/bufferline.nvim',
+    event = 'VeryLazy',
     version = '*',
     dependencies = 'nvim-tree/nvim-web-devicons',
     config = function()

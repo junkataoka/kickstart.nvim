@@ -14,5 +14,27 @@ return {
         end,
       },
     },
+    -- Checkbox rendering — match obsidian.nvim task states
+    markdown_inline = {
+      checkboxes = {
+        enable = true,
+        -- [ ] undone
+        unchecked = { text = '󰄰', hl = 'MarkviewCheckboxUnchecked' },
+        -- [x] done
+        checked = { text = '󰗠', hl = 'MarkviewCheckboxChecked', scope_hl = 'MarkviewCheckboxChecked' },
+        -- [-] pending (scope_hl = false overrides the default's "MarkviewCheckboxStriked" strikethrough)
+        ['-'] = { text = '󰥔', hl = 'MarkviewCheckboxPending', scope_hl = false },
+        -- [~] in-progress / working
+        ['~'] = { text = '󰔟', hl = 'MarkviewCheckboxProgress' },
+        -- [!] important
+        ['!'] = { text = '󰀦', hl = 'MarkviewCheckboxUnchecked' },
+        -- [?] uncertain / ambiguous
+        ['?'] = { text = '󰋗', hl = 'MarkviewCheckboxPending' },
+        -- [>] on hold / deferred
+        ['>'] = { text = '󰒲', hl = 'MarkviewCheckboxPending' },
+        -- [_] cancelled
+        ['_'] = { text = '󰜺', hl = 'MarkviewCheckboxCancelled', scope_hl = 'MarkviewCheckboxStriked' },
+      },
+    },
   },
 }

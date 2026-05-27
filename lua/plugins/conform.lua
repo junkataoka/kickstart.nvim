@@ -29,7 +29,7 @@ return {
     end,
     formatters_by_ft = {
       lua = { 'stylua' },
-      python = { 'black', 'isort' },
+      python = { 'ruff_organize_imports', 'ruff_format' },
       markdown = { 'markdownlint', 'prettier' },
     },
   },

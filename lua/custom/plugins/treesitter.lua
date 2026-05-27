@@ -1,6 +1,8 @@
 return {
   { -- Highlight, edit, and navigate code
     'nvim-treesitter/nvim-treesitter',
+    event = { 'BufReadPost', 'BufNewFile' },
+    cmd = { 'TSUpdate', 'TSUpdateSync', 'TSInstall', 'TSInstallSync', 'TSModuleInfo' },
     build = ':TSUpdate',
     dependencies = {
       'nvim-treesitter/nvim-treesitter-textobjects',
@@ -16,9 +18,14 @@ return {
         'luadoc',
         'markdown',
         'markdown_inline',
+        'python',
         'query',
         'vim',
         'vimdoc',
+        'yaml',
+        'json',
+        'toml',
+        'dockerfile',
       },
       auto_install = false, -- disabled: latex parser fails to compile; install manually with :TSInstall
       highlight = {
@@ -79,6 +86,7 @@ return {
 
   { -- Show context of current function/class
     'nvim-treesitter/nvim-treesitter-context',
+    event = { 'BufReadPost', 'BufNewFile' },
     opts = {
       enable = true,
       max_lines = 3,

@@ -1,6 +1,9 @@
 -- Clear highlights on search
 vim.keymap.set('n', '<Esc>', '<cmd>nohlsearch<CR>')
 
+-- Map Ctrl-[ to Esc in all modes (kitty kkp distinguishes them; restore legacy behavior)
+vim.keymap.set({ 'n', 'i', 'v', 's', 'x', 'c', 'o', 't' }, '<C-[>', '<Esc>', { desc = 'Ctrl-[ as Escape' })
+
 -- Diagnostic keymaps
 vim.keymap.set('n', '<leader>q', vim.diagnostic.setloclist, { desc = 'Open diagnostic [Q]uickfix list' })
 

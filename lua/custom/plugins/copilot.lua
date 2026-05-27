@@ -3,33 +3,36 @@ return {
   cmd = 'Copilot',
   build = ':Copilot auth',
   event = 'InsertEnter',
-  opts = {
-    suggestion = {
-      enabled = not vim.g.ai_cmp,
-      auto_trigger = true,
-      keymap = {
-        accept = '<C-y>',
-        next = '<M-]>',
-        prev = '<M-[>',
+  config = function()
+    require('copilot').setup {
+      suggestion = {
+        enabled = not vim.g.ai_cmp,
+        auto_trigger = true,
+        keymap = {
+          accept = '<C-]>',
+          dismiss = '<C-e>',
+          next = '<M-]>',
+          prev = '<M-[>',
+        },
       },
-    },
-    panel = {
-      enabled = true,
-      auto_refresh = false,
-      keymap = {
-        open = '<M-p>',
+      panel = {
+        enabled = true,
+        auto_refresh = false,
+        keymap = {
+          open = '<M-p>',
+        },
       },
-    },
-    filetypes = {
-      markdown = true,
-      help = true,
-      python = true,
-      lua = true,
-      yaml = true,
-      javascript = true,
-      typescript = true,
-      rust = true,
-      go = true,
-    },
-  },
+      filetypes = {
+        markdown = true,
+        help = true,
+        python = true,
+        lua = true,
+        yaml = true,
+        javascript = true,
+        typescript = true,
+        rust = true,
+        go = true,
+      },
+    }
+  end,
 }
