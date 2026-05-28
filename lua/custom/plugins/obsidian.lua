@@ -33,17 +33,6 @@ return {
         name = 'notes',
         path = '~/notes-md',
       },
-      {
-        name = 'vertex',
-        path = '~/projects/vertex',
-        -- Auto-activate when entering any file under ~/projects/vertex/<customer>/
-        overrides = {
-          notes_subdir = nil,
-          new_notes_location = 'current_dir',
-          disable_frontmatter = true, -- Vertex enforces its own schema via pre-commit
-          daily_notes = { folder = nil },
-        },
-      },
     },
 
     -- Notes directory (flat by default, custom commands handle subdirs)
