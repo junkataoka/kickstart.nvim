@@ -26,6 +26,8 @@ return {
     { '<leader>nt', '<cmd>Obsidian tags<CR>', desc = '[N]otes: [T]ags' },
     { '<leader>nf', '<cmd>Obsidian quick_switch<CR>', desc = '[N]otes: [F]ind / quick switch' },
     { '<leader>ni', '<cmd>Obsidian paste_img<CR>', desc = '[N]otes: Paste [I]mage from clipboard' },
+    { '<leader>nr', '<cmd>MdRetro<CR>', desc = '[N]otes: [R]etro (open current month)' },
+    { '<leader>nW', '<cmd>MdWin<CR>', desc = '[N]otes: Capture [W]in / retro entry' },
   },
   opts = {
     workspaces = {
@@ -719,6 +721,144 @@ return {
         end
       end)
     end, { desc = 'Link a project to current worknote (markdown)' })
+
+    ---------------------------------------------------------------------------
+    -- Retro / achievement log — append-only monthly file for perf review
+    ---------------------------------------------------------------------------
+    local RETRO_CATEGORIES = {
+      'Shipped',
+      'Fixed',
+      'Learned',
+      'Mentored',
+      'Impact',
+      'Recognition',
+      'Lowlights',
+      'Carry Forward',
+    }
+
+    local function retro_filepath()
+      local year = os.date '%Y'
+      local month = os.date '%m'
+      local dir = vim.fn.expand('~/notes-md/retro/' .. year)
+      vim.fn.mkdir(dir, 'p')
+      return dir .. '/' .. month .. '.md'
+    end
+
+    local function ensure_retro_file(filepath)
+      if vim.fn.filereadable(filepath) == 1 then
+        return true
+      end
+      local content = load_template '~/notes-md/templates/retro.md'
+      if not content then
+        return false
+      end
+      local f = io.open(filepath, 'w')
+      if not f then
+        vim.notify('Could not create retro file: ' .. filepath, vim.log.levels.ERROR)
+        return false
+      end
+      f:write(content)
+      f:close()
+      return true
+    end
+
+    vim.api.nvim_create_user_command('MdRetro', function()
+      local filepath = retro_filepath()
+      ensure_retro_file(filepath)
+      vim.cmd('edit ' .. filepath)
+    end, { desc = 'Open current month retro / achievement log' })
+
+    vim.api.nvim_create_user_command('MdWin', function(cmd_opts)
+      local function do_append(category, text)
+        if not text or text == '' then
+          return
+        end
+        local filepath = retro_filepath()
+        if not ensure_retro_file(filepath) then
+          return
+        end
+
+        local lines = {}
+        local f = io.open(filepath, 'r')
+        if not f then
+          vim.notify('Could not read: ' .. filepath, vim.log.levels.ERROR)
+          return
+        end
+        for line in f:lines() do
+          table.insert(lines, line)
+        end
+        f:close()
+
+        local header = '## ' .. category
+        local section_idx = nil
+        for i, line in ipairs(lines) do
+          if line == header then
+            section_idx = i
+            break
+          end
+        end
+
+        if not section_idx then
+          vim.notify('Section not found in retro file: ' .. header, vim.log.levels.ERROR)
+          return
+        end
+
+        -- Find end of section: last non-blank line before next "## " or EOF
+        local insert_at = #lines + 1
+        for i = section_idx + 1, #lines do
+          if lines[i]:match '^## ' then
+            insert_at = i
+            break
+          end
+        end
+        while insert_at > section_idx + 1 and lines[insert_at - 1] == '' do
+          insert_at = insert_at - 1
+        end
+
+        local entry = '- ' .. os.date '%Y-%m-%d' .. ': ' .. text
+        table.insert(lines, insert_at, entry)
+        -- Ensure blank line after entry if next is a heading
+        if lines[insert_at + 1] and lines[insert_at + 1]:match '^## ' then
+          table.insert(lines, insert_at + 1, '')
+        end
+
+        local out = io.open(filepath, 'w')
+        if not out then
+          vim.notify('Could not write: ' .. filepath, vim.log.levels.ERROR)
+          return
+        end
+        out:write(table.concat(lines, '\n'))
+        if not lines[#lines]:match '\n$' then
+          out:write '\n'
+        end
+        out:close()
+
+        vim.notify(string.format('✓ %s → %s', category, vim.fn.fnamemodify(filepath, ':t')), vim.log.levels.INFO)
+      end
+
+      local preset_category = cmd_opts.args ~= '' and cmd_opts.args or nil
+      if preset_category then
+        vim.ui.input({ prompt = preset_category .. ': ' }, function(input)
+          do_append(preset_category, input)
+        end)
+        return
+      end
+
+      vim.ui.select(RETRO_CATEGORIES, { prompt = 'Win category:' }, function(category)
+        if not category then
+          return
+        end
+        vim.ui.input({ prompt = category .. ': ' }, function(input)
+          do_append(category, input)
+        end)
+      end)
+    end, {
+      nargs = '?',
+      desc = 'Capture a win / retro entry to current month log',
+      complete = function()
+        return RETRO_CATEGORIES
+      end,
+    })
 
     ---------------------------------------------------------------------------
     -- Keymaps (global <leader>n* keymaps are registered via lazy.nvim `keys`
