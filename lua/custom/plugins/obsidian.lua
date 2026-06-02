@@ -464,7 +464,7 @@ return {
 
       vim.notify('Fetching meetings for ' .. date .. ' (this takes ~60-90s)...', vim.log.levels.INFO)
 
-      local timeout_ms = 240000 -- 4 minute timeout
+      local timeout_ms = 600000 -- 10 minute timeout (matches shell script's `timeout 600`)
       local job_done = false
 
       local job_id = vim.fn.jobstart({ script_path, date }, {
