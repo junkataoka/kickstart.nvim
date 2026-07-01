@@ -1142,14 +1142,23 @@ return {
       local lines = vim.api.nvim_buf_get_lines(0, 0, -1, false)
       local summary
       for _, line in ipairs(lines) do
-        -- Accept `#inbox: foo`, `# inbox: foo` (formatter may add space and treat as H1),
-        -- `inbox: foo` (bare), or `- inbox: foo` (list item).
-        local tagged = line:match '^%s*#?%s*inbox%s*:%s*(.+)$'
-          or line:match '^%s*%-%s*inbox%s*:%s*(.+)$'
-          or line:match '#inbox%s*:?%s*(.+)$'
-        if tagged and vim.trim(tagged) ~= '' and vim.trim(tagged) ~= '#inbox' then
-          summary = vim.trim(tagged):gsub('^#inbox%s*:?%s*', ''):gsub('^#%s*inbox%s*:?%s*', '')
-          break
+        -- Skip HTML comment lines to avoid capturing the template tip like
+        -- `<!-- Tip: ... `#inbox:` ... -->` as a real inbox item.
+        if not line:match '^%s*<!%-%-' then
+          -- Accept `#inbox: foo`, `# inbox: foo` (formatter may add space and treat as H1),
+          -- `inbox: foo` (bare), or `- inbox: foo` (list item).
+          local tagged = line:match '^%s*#?%s*inbox%s*:%s*(.+)$'
+            or line:match '^%s*%-%s*inbox%s*:%s*(.+)$'
+            or line:match '#inbox%s*:?%s*(.+)$'
+          if tagged and vim.trim(tagged) ~= '' and vim.trim(tagged) ~= '#inbox' then
+            summary = vim.trim(tagged):gsub('^#inbox%s*:?%s*', ''):gsub('^#%s*inbox%s*:?%s*', '')
+            -- Strip trailing HTML comment close if the line was `... #inbox: foo -->`
+            summary = summary:gsub('%s*%-%->%s*$', '')
+            summary = vim.trim(summary)
+            if summary ~= '' then
+              break
+            end
+          end
         end
       end
       if not summary or summary == '' then
@@ -1308,10 +1317,14 @@ return {
       callback = function(ev)
         local lines = vim.api.nvim_buf_get_lines(ev.buf, 0, -1, false)
         for _, line in ipairs(lines) do
-          -- Match `#inbox`, `# inbox` (formatter-broken), or `inbox:` on its own line
-          if line:match '#%s*inbox' or line:match '^%s*inbox%s*:' or line:match '^%s*%-%s*inbox%s*:' then
-            push_current_to_inbox()
-            return
+          -- Skip HTML comment lines (template tips contain literal `#inbox:`
+          -- inside `<!-- ... -->` which would otherwise trigger a spurious push).
+          if not line:match '^%s*<!%-%-' then
+            -- Match `#inbox`, `# inbox` (formatter-broken), or `inbox:` on its own line
+            if line:match '#%s*inbox' or line:match '^%s*inbox%s*:' or line:match '^%s*%-%s*inbox%s*:' then
+              push_current_to_inbox()
+              return
+            end
           end
         end
       end,
