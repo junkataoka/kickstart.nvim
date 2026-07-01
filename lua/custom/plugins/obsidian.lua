@@ -1171,6 +1171,9 @@ return {
     end
 
     -- Run a wiki script in a bottom terminal split.
+    -- After the script exits, replaces the confusing "[Process exited N]" with
+    -- a colored status line + "press any key to close" prompt, then auto-closes
+    -- the terminal buffer on keypress. Press q/Esc to close early.
     local function run_wiki_script(script_name, args)
       local script = wiki_root .. '/.scripts/' .. script_name
       if vim.fn.filereadable(script) == 0 then
@@ -1178,16 +1181,42 @@ return {
         return
       end
       vim.cmd 'botright 20split'
-      local cmd = { script }
-      vim.list_extend(cmd, args or {})
-      vim.fn.termopen(cmd, {
+
+      -- Build shell command: run script, then show friendly prompt + wait for keypress.
+      local shell_cmd = vim.fn.shellescape(script)
+      for _, arg in ipairs(args or {}) do
+        shell_cmd = shell_cmd .. ' ' .. vim.fn.shellescape(arg)
+      end
+      local wrapped = {
+        'sh',
+        '-c',
+        shell_cmd
+          .. '; rc=$?; printf "\\n\\033[2m────────────────────────────────────────\\033[0m\\n"; '
+          .. 'if [ $rc -eq 0 ]; then printf "\\033[32m✓ %s finished (exit 0)\\033[0m — " ' .. vim.fn.shellescape(script_name) .. '; '
+          .. 'else printf "\\033[31m✗ %s failed (exit %d)\\033[0m — " ' .. vim.fn.shellescape(script_name) .. ' "$rc"; fi; '
+          .. 'printf "press any key to close\\n"; '
+          .. 'stty -icanon -echo min 1 2>/dev/null; dd bs=1 count=1 >/dev/null 2>&1; stty icanon echo 2>/dev/null; '
+          .. 'exit $rc',
+      }
+      local term_buf = vim.api.nvim_get_current_buf()
+      vim.fn.termopen(wrapped, {
         on_exit = function(_, code)
           vim.schedule(function()
             local lvl = code == 0 and vim.log.levels.INFO or vim.log.levels.WARN
             vim.notify('wiki: ' .. script_name .. ' exit=' .. code, lvl)
+            -- Auto-close the terminal buffer once the wrapper exits (after keypress).
+            if vim.api.nvim_buf_is_valid(term_buf) then
+              vim.api.nvim_buf_delete(term_buf, { force = true })
+            end
           end)
         end,
       })
+      -- Also let user close early with q/Esc without waiting for the read.
+      vim.keymap.set({ 'n', 't' }, 'q', function()
+        if vim.api.nvim_buf_is_valid(term_buf) then
+          vim.api.nvim_buf_delete(term_buf, { force = true })
+        end
+      end, { buffer = term_buf, desc = 'Close wiki script output' })
       vim.cmd 'startinsert'
     end
 
