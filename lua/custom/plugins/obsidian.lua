@@ -1240,6 +1240,58 @@ return {
     vim.keymap.set('n', '<leader>xh', function() run_wiki_script 'wiki_health.sh' end,    { desc = 'Wiki [h]ealth audit' })
     vim.keymap.set('n', '<leader>xe', function() run_wiki_script 'wiki_evaluator.sh' end, { desc = 'Wiki [e]valuator (Loop 4)' })
 
+    -- <leader>xn — open (or create) today's worknote at worknotes/YYYY/MM/YYYY-MM-DD.md.
+    -- Auto-creates the month directory. If the file is new, seeds it with a header + hint.
+    local function open_today_worknote()
+      local date = os.date '%Y-%m-%d'
+      local year = os.date '%Y'
+      local month = os.date '%m'
+      local dir = wiki_root .. '/worknotes/' .. year .. '/' .. month
+      local path = dir .. '/' .. date .. '.md'
+      if vim.fn.isdirectory(dir) == 0 then vim.fn.mkdir(dir, 'p') end
+      local is_new = vim.fn.filereadable(path) == 0
+      vim.cmd('edit ' .. vim.fn.fnameescape(path))
+      if is_new then
+        local lines = {
+          '# ' .. date,
+          '',
+          '<!-- Tip: prefix any line with `#inbox:` to auto-push to the wiki queue on :w -->',
+          '',
+          '## ',
+          '',
+        }
+        vim.api.nvim_buf_set_lines(0, 0, -1, false, lines)
+        vim.api.nvim_win_set_cursor(0, { 5, 3 }) -- cursor after "## "
+        vim.cmd 'startinsert!'
+      end
+    end
+    vim.keymap.set('n', '<leader>xn', open_today_worknote, { desc = 'Wiki open today\'s [n]ote' })
+    vim.api.nvim_create_user_command('WikiToday', open_today_worknote, { desc = 'Open today\'s worknote' })
+
+    -- <leader>xs — save the current CLI/agent session as a wiki session note.
+    -- Prompts for a kebab-case slug, then runs save_session.sh <slug>.
+    local function save_session_prompt()
+      vim.ui.input({ prompt = 'Session slug (kebab-case): ' }, function(slug)
+        if not slug or slug == '' then return end
+        slug = slug:gsub('%s+', '-'):lower()
+        run_wiki_script('save_session.sh', { slug })
+      end)
+    end
+    vim.keymap.set('n', '<leader>xs', save_session_prompt, { desc = 'Wiki [s]ave session' })
+    vim.api.nvim_create_user_command('WikiSave', save_session_prompt, { desc = 'Save current session to wiki' })
+
+    -- BufWritePre auto-mkdir: prevents E212 when writing to a not-yet-existing
+    -- subdir under worknotes/journal/daily/retro. Scoped to wiki_root only —
+    -- does NOT auto-create dirs outside the vault.
+    vim.api.nvim_create_autocmd('BufWritePre', {
+      group = vim.api.nvim_create_augroup('wiki-auto-mkdir', { clear = true }),
+      pattern = wiki_root .. '/**/*.md',
+      callback = function(ev)
+        local dir = vim.fn.fnamemodify(ev.file, ':h')
+        if vim.fn.isdirectory(dir) == 0 then vim.fn.mkdir(dir, 'p') end
+      end,
+    })
+
     -- Auto-push on save when buffer contains `#inbox` tag (opt-in per-note).
     -- Dedup handled by inbox_add.sh (case-insensitive substring on Open section).
     vim.api.nvim_create_autocmd('BufWritePost', {
