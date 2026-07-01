@@ -28,6 +28,27 @@ return {
     { '<leader>ni', '<cmd>Obsidian paste_img<CR>', desc = '[N]otes: Paste [I]mage from clipboard' },
     { '<leader>nr', '<cmd>MdRetro<CR>', desc = '[N]otes: [R]etro (open current month)' },
     { '<leader>nW', '<cmd>MdWin<CR>', desc = '[N]otes: Capture [W]in / retro entry' },
+
+    -- <leader>x* wiki-loop bridge (eager registration → lazy-load on trigger)
+    -- Required because plugin is ft='markdown' — config = function() only runs
+    -- after opening a markdown buffer. Without these entries, <leader>xn from
+    -- a cold-start empty buffer silently does nothing (§V.D lint gap).
+    { '<leader>xi', '<cmd>WikiInbox<CR>',     desc = 'Wiki push current → [i]nbox' },
+    { '<leader>xq', '<cmd>WikiQueue<CR>',     desc = 'Wiki open [q]ueue' },
+    { '<leader>xp', '<cmd>WikiProposals<CR>', desc = 'Wiki open [p]roposals' },
+    { '<leader>xv', '<cmd>WikiVerdicts<CR>',  desc = 'Wiki open [v]erdicts' },
+    { '<leader>xd', '<cmd>WikiDashboard<CR>', desc = 'Wiki [d]ashboard' },
+    { '<leader>xl', '<cmd>WikiLint<CR>',      desc = 'Wiki [l]int' },
+    { '<leader>xh', '<cmd>WikiHealth<CR>',    desc = 'Wiki [h]ealth audit' },
+    { '<leader>xe', '<cmd>WikiEvaluator<CR>', desc = 'Wiki [e]valuator (Loop 4)' },
+    { '<leader>xn', '<cmd>WikiToday<CR>',     desc = 'Wiki open today\'s [n]ote' },
+    { '<leader>xs', '<cmd>WikiSave<CR>',      desc = 'Wiki [s]ave session' },
+  },
+  cmd = {
+    -- Eager command registration so <leader>x* keys trigger lazy-load
+    'WikiInbox', 'WikiQueue', 'WikiProposals', 'WikiVerdicts',
+    'WikiDashboard', 'WikiLint', 'WikiHealth', 'WikiEvaluator',
+    'WikiToday', 'WikiSave',
   },
   opts = {
     workspaces = {
