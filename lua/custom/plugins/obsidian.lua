@@ -49,11 +49,7 @@ return {
       template = nil, -- We handle daily notes through custom worknote/journal commands
     },
 
-    -- Completion via nvim-cmp (obsidian.nvim auto-registers & injects sources per-buffer)
-    completion = {
-      nvim_cmp = true,
-      min_chars = 1,
-    },
+    -- Completion now provided by built-in obsidian-ls LSP server
 
     -- Wiki-style links
     link = { style = 'wiki' },
@@ -402,14 +398,20 @@ return {
     end, { desc = 'Pull incomplete tasks from previous worknote' })
 
     ---------------------------------------------------------------------------
-    -- Helper: insert meetings into "Meetings" section of current buffer
+    -- Helper: insert meetings into "Meetings" section of the given buffer
+    -- bufnr: explicit buffer handle (don't use 0 — by the time the async job
+    -- returns the user may have switched buffers, and writing to "current"
+    -- would land the meetings in the wrong file or silently no-op.
     ---------------------------------------------------------------------------
-    local function insert_meetings(meetings_lines)
+    local function insert_meetings(bufnr, meetings_lines)
       if #meetings_lines == 0 then
-        return false
+        return false, 'no meeting lines to insert'
+      end
+      if not vim.api.nvim_buf_is_valid(bufnr) then
+        return false, 'target buffer ' .. bufnr .. ' is no longer valid'
       end
 
-      local lines = vim.api.nvim_buf_get_lines(0, 0, -1, false)
+      local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
       local insert_line = nil
 
       for i, line in ipairs(lines) do
@@ -429,7 +431,7 @@ return {
                 end_line = k
               end
               -- Remove all existing meeting lines
-              vim.api.nvim_buf_set_lines(0, j - 1, end_line, false, {})
+              vim.api.nvim_buf_set_lines(bufnr, j - 1, end_line, false, {})
               break
             elseif lines[j]:match '^## ' then
               insert_line = j
@@ -444,10 +446,10 @@ return {
       end
 
       if insert_line then
-        vim.api.nvim_buf_set_lines(0, insert_line - 1, insert_line - 1, false, meetings_lines)
+        vim.api.nvim_buf_set_lines(bufnr, insert_line - 1, insert_line - 1, false, meetings_lines)
         return true
       end
-      return false
+      return false, 'no "## Meetings" section found in target buffer'
     end
 
     ---------------------------------------------------------------------------
@@ -455,23 +457,32 @@ return {
     ---------------------------------------------------------------------------
     vim.api.nvim_create_user_command('MdMeetings', function(cmd_opts)
       local date = cmd_opts.args ~= '' and cmd_opts.args or os.date '%Y-%m-%d'
-      local script_path = vim.fn.expand '~/notes/.scripts/fetch_meetings_workiq.sh'
+      local script_path = vim.fn.expand '~/notes-md/.scripts/fetch_meetings_workiq.sh'
 
       if vim.fn.filereadable(script_path) ~= 1 then
         vim.notify('Meetings script not found: ' .. script_path, vim.log.levels.ERROR)
         return
       end
 
-      vim.notify('Fetching meetings for ' .. date .. ' (this takes ~60-90s)...', vim.log.levels.INFO)
+      -- Pin the buffer at invocation time. The async job takes 30-600s; by the
+      -- time stdout returns, the user may have switched buffers. Using `0`
+      -- (current buffer) in the callback would land meetings in the wrong file.
+      local target_bufnr = vim.api.nvim_get_current_buf()
+      local target_name = vim.api.nvim_buf_get_name(target_bufnr)
+      local target_label = target_name ~= '' and vim.fn.fnamemodify(target_name, ':t') or ('buffer ' .. target_bufnr)
+
+      vim.notify('Fetching meetings for ' .. date .. ' → ' .. target_label .. ' (this takes ~30-60s)...', vim.log.levels.INFO)
 
       local timeout_ms = 600000 -- 10 minute timeout (matches shell script's `timeout 600`)
       local job_done = false
+      local stdout_got_data = false
 
       local job_id = vim.fn.jobstart({ script_path, date }, {
         stdout_buffered = true,
         stderr_buffered = true,
         on_stdout = function(_, data)
-          if data and #data > 0 and data[1] ~= '' then
+          if data and #data > 0 and not (#data == 1 and data[1] == '') then
+            stdout_got_data = true
             vim.schedule(function()
               -- Filter out empty lines at the end
               local meetings = {}
@@ -485,13 +496,16 @@ return {
                 table.remove(meetings)
               end
 
-              if insert_meetings(meetings) then
-                vim.notify('Inserted meetings for ' .. date, vim.log.levels.INFO)
+              if #meetings == 0 then
+                vim.notify('Meetings fetch returned no content for ' .. date, vim.log.levels.WARN)
+                return
+              end
+
+              local ok, err = insert_meetings(target_bufnr, meetings)
+              if ok then
+                vim.notify('Inserted ' .. #meetings .. ' line(s) of meetings for ' .. date .. ' into ' .. target_label, vim.log.levels.INFO)
               else
-                -- No Meetings section found, insert at cursor
-                local cursor = vim.api.nvim_win_get_cursor(0)
-                vim.api.nvim_buf_set_lines(0, cursor[1], cursor[1], false, meetings)
-                vim.notify('Inserted meetings at cursor for ' .. date, vim.log.levels.INFO)
+                vim.notify('Meetings fetch succeeded but insertion failed: ' .. (err or 'unknown') .. '. See /tmp/meetings_debug.log', vim.log.levels.ERROR)
               end
             end)
           end
@@ -508,11 +522,13 @@ return {
         end,
         on_exit = function(_, exit_code)
           job_done = true
-          if exit_code ~= 0 then
-            vim.schedule(function()
-              vim.notify('Meetings fetch exited with code ' .. exit_code, vim.log.levels.WARN)
-            end)
-          end
+          vim.schedule(function()
+            if exit_code ~= 0 then
+              vim.notify('Meetings fetch exited with code ' .. exit_code .. '. See /tmp/meetings_debug.log', vim.log.levels.WARN)
+            elseif not stdout_got_data then
+              vim.notify('Meetings fetch exited 0 but produced no stdout. See /tmp/meetings_debug.log', vim.log.levels.WARN)
+            end
+          end)
         end,
       })
 
@@ -555,61 +571,143 @@ return {
     ---------------------------------------------------------------------------
     -- Command: MdProject — Create or open a project note
     ---------------------------------------------------------------------------
-    vim.api.nvim_create_user_command('MdProject', function(cmd_opts)
-      local project_name = cmd_opts.args
-
-      -- If no project name provided, show picker
-      if project_name == '' then
-        local projects = get_projects()
-
-        if #projects == 0 then
-          vim.ui.input({ prompt = 'New project name: ' }, function(input)
-            if input and input ~= '' then
-              vim.cmd('MdProject ' .. input)
-            end
-          end)
-        else
-          table.insert(projects, 1, '[+ New Project]')
-          vim.ui.select(projects, { prompt = 'Select project:' }, function(choice)
-            if choice == '[+ New Project]' then
-              vim.ui.input({ prompt = 'New project name: ' }, function(input)
-                if input and input ~= '' then
-                  vim.cmd('MdProject ' .. input)
-                end
-              end)
-            elseif choice then
-              vim.cmd('MdProject ' .. choice)
-            end
-          end)
-        end
+    local function open_or_create_project(project_name)
+      if not project_name or project_name == '' then
         return
       end
-
-      -- Sanitize project name for filename
       local filename = project_name:gsub('%s+', '-'):lower()
       local filepath = vim.fn.expand('~/notes-md/projects/' .. filename .. '.md')
 
       if vim.fn.filereadable(filepath) == 1 then
-        vim.cmd('edit ' .. filepath)
+        vim.cmd.edit(vim.fn.fnameescape(filepath))
         vim.notify('Opened project: ' .. project_name, vim.log.levels.INFO)
         return
       end
 
-      -- Load template and create new file
       local content = load_template('~/notes-md/templates/project.md', { project_name = project_name })
-      if content then
-        vim.cmd('edit ' .. filepath)
-        local lines = vim.split(content, '\n')
-        vim.api.nvim_buf_set_lines(0, 0, -1, false, lines)
-        vim.cmd 'write'
-        vim.notify('Created new project: ' .. project_name, vim.log.levels.INFO)
+      if not content then
+        vim.notify('Failed to load project template', vim.log.levels.ERROR)
+        return
       end
+      vim.cmd.edit(vim.fn.fnameescape(filepath))
+      local lines = vim.split(content, '\n')
+      vim.api.nvim_buf_set_lines(0, 0, -1, false, lines)
+      vim.cmd 'write'
+      vim.notify('Created new project: ' .. project_name, vim.log.levels.INFO)
+    end
+
+    vim.api.nvim_create_user_command('MdProject', function(cmd_opts)
+      local project_name = cmd_opts.args
+
+      if project_name ~= '' then
+        open_or_create_project(project_name)
+        return
+      end
+
+      local projects = get_projects()
+
+      if #projects == 0 then
+        vim.ui.input({ prompt = 'New project name: ' }, function(input)
+          open_or_create_project(input)
+        end)
+        return
+      end
+
+      table.insert(projects, 1, '[+ New Project]')
+      vim.ui.select(projects, { prompt = 'Select project:' }, function(choice)
+        if not choice then
+          return
+        end
+        if choice == '[+ New Project]' then
+          vim.ui.input({ prompt = 'New project name: ' }, function(input)
+            open_or_create_project(input)
+          end)
+        else
+          open_or_create_project(choice)
+        end
+      end)
     end, {
       nargs = '?',
       desc = 'Create or open a project note (markdown)',
       complete = function()
         return get_projects()
       end,
+    })
+
+    ---------------------------------------------------------------------------
+    -- Command: MdAddRepo — Insert a plain markdown link to a repo under the
+    -- current note's "### Repositories" section (no git submodule).
+    ---------------------------------------------------------------------------
+
+    -- Derive a display name from a git remote URL.
+    local function repo_name(url)
+      local base = url:gsub('%.git$', ''):match '([^/:]+)$' or url
+      return (base:gsub('%%20', ' '))
+    end
+
+    -- Convert a git remote URL to a browsable https web URL when possible.
+    local function repo_web_url(url)
+      local ownerrepo = url:match '^git@github[^:]*:(.+)$'
+      if ownerrepo then
+        return 'https://github.com/' .. ownerrepo:gsub('%.git$', '')
+      end
+      if url:match '^https://github%.com/' then
+        return (url:gsub('%.git$', ''))
+      end
+      return url -- azure devops / other: leave as-is
+    end
+
+    -- Insert a markdown link under "### Repositories" in the current buffer.
+    local function insert_repo_link(name, web)
+      local link = string.format('- [%s](%s)', name, web)
+      local lines = vim.api.nvim_buf_get_lines(0, 0, -1, false)
+      for i, line in ipairs(lines) do
+        if line:match '^###%s+Repositories' then
+          local insert_at = i
+          if lines[i + 1] and lines[i + 1]:match '^%s*$' then
+            insert_at = i + 1
+          end
+          vim.api.nvim_buf_set_lines(0, insert_at, insert_at, false, { link })
+          return true
+        end
+      end
+      return false
+    end
+
+    local function add_repo(url, name)
+      if not url or url == '' then
+        return
+      end
+      name = (name and name ~= '') and name or repo_name(url)
+      local web = repo_web_url(url)
+      if insert_repo_link(name, web) then
+        vim.cmd 'write'
+        vim.notify('Linked repo: ' .. name, vim.log.levels.INFO)
+      else
+        -- No section: insert link at cursor as a fallback.
+        vim.api.nvim_put({ string.format('- [%s](%s)', name, web) }, 'l', true, true)
+        vim.notify('No "### Repositories" section — inserted at cursor', vim.log.levels.WARN)
+      end
+    end
+
+    vim.api.nvim_create_user_command('MdAddRepo', function(cmd_opts)
+      local url = cmd_opts.fargs[1]
+      local name = cmd_opts.fargs[2]
+      if url and url ~= '' then
+        add_repo(url, name)
+        return
+      end
+      vim.ui.input({ prompt = 'Repo URL: ' }, function(input_url)
+        if not input_url or input_url == '' then
+          return
+        end
+        vim.ui.input({ prompt = 'Display name: ', default = repo_name(input_url) }, function(input_name)
+          add_repo(input_url, input_name)
+        end)
+      end)
+    end, {
+      nargs = '*',
+      desc = 'Insert a markdown link to a repo under the current note\'s Repositories section',
     })
 
     ---------------------------------------------------------------------------
@@ -928,6 +1026,63 @@ return {
     -- obsidian.nvim already registers <CR> as smart_action (follow links, toggle
     -- checkboxes, etc.) for vault buffers. These add gf and K as alternatives.
     -- We use BufEnter instead of FileType to ensure obsidian_buffer flag is set.
+    -- Resolve a wiki link target (path or note id) to a file under the vault.
+    -- Handles [[path/to/note]], [[note-id]], optional |alias and #heading.
+    local function resolve_wiki_target(link_text)
+      if not link_text or link_text == '' then
+        return nil
+      end
+      local target = link_text:gsub('^%[%[', ''):gsub('%]%]$', '')
+      target = target:gsub('|.*$', ''):gsub('#.*$', '')
+      target = vim.trim(target)
+      if target == '' then
+        return nil
+      end
+
+      local vault = vim.fn.expand '~/notes-md'
+
+      -- Path-style link (contains slash) — resolve relative to vault
+      if target:find('/', 1, true) then
+        local candidates = { target, target .. '.md' }
+        for _, c in ipairs(candidates) do
+          local p = vault .. '/' .. c
+          if vim.fn.filereadable(p) == 1 then
+            return p
+          end
+        end
+      end
+
+      -- Bare id/filename — search anywhere in vault
+      local name = target:gsub('%.md$', '')
+      local matches = vim.fn.globpath(vault, '**/' .. name .. '.md', false, true)
+      if #matches > 0 then
+        return matches[1]
+      end
+      return nil
+    end
+
+    local function follow_wiki_link()
+      local ok, api = pcall(require, 'obsidian.api')
+      if not ok then
+        return false
+      end
+      local link = api.cursor_link()
+      if not link then
+        return false
+      end
+      local path = resolve_wiki_target(link)
+      if path then
+        vim.cmd.edit(vim.fn.fnameescape(path))
+        return true
+      end
+      -- Fall back to obsidian's own resolver (LSP-backed)
+      local ok2 = pcall(vim.cmd, 'Obsidian follow_link')
+      if not ok2 then
+        vim.notify('Could not resolve link: ' .. link, vim.log.levels.WARN)
+      end
+      return true
+    end
+
     vim.api.nvim_create_autocmd('BufEnter', {
       pattern = '*.md',
       callback = function(ev)
@@ -937,27 +1092,149 @@ return {
             return
           end
 
-          local api = require 'obsidian.api'
-
           -- gf: follow wiki link under cursor, fall back to built-in gf
           vim.keymap.set('n', 'gf', function()
-            if api.cursor_link() then
-              vim.cmd 'Obsidian follow_link'
-            else
+            if not follow_wiki_link() then
               vim.cmd 'normal! gf'
             end
           end, { buffer = ev.buf, desc = 'Follow [[link]] or default gf' })
 
+          -- <CR>: follow wiki link under cursor in normal mode
+          vim.keymap.set('n', '<CR>', function()
+            if not follow_wiki_link() then
+              vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes('<CR>', true, false, true), 'n', false)
+            end
+          end, { buffer = ev.buf, desc = 'Follow [[link]] under cursor' })
+
           -- K: follow link under cursor, fall back to LSP hover / keywordprg
           vim.keymap.set('n', 'K', function()
-            if api.cursor_link() then
-              vim.cmd 'Obsidian follow_link'
+            local ok, api = pcall(require, 'obsidian.api')
+            if ok and api.cursor_link() then
+              follow_wiki_link()
             else
               vim.lsp.buf.hover()
             end
           end, { buffer = ev.buf, desc = 'Hover preview or default K' })
         end, 0)
       end,
+    })
+
+    ---------------------------------------------------------------------------
+    -- Wiki Loop bridge (Loop 4/6/7 integration — Karpathy Loop Engineering §V)
+    -- Push tagged notes to ~/notes-md/.inbox/queue.md; surface dashboards.
+    -- Design: opt-in per note via `#inbox` tag (event-not-batch, §V Table IV).
+    ---------------------------------------------------------------------------
+    local wiki_root = vim.fn.expand '~/notes-md'
+    local inbox_add = wiki_root .. '/.scripts/inbox_add.sh'
+
+    -- Push current buffer to inbox. Summary = first `#inbox: text` line, or filename.
+    local function push_current_to_inbox()
+      local bufname = vim.api.nvim_buf_get_name(0)
+      if bufname == '' then
+        vim.notify('wiki: no file to push', vim.log.levels.WARN)
+        return
+      end
+      if not bufname:find(wiki_root, 1, true) then
+        vim.notify('wiki: buffer is outside ' .. wiki_root, vim.log.levels.WARN)
+        return
+      end
+      local rel = bufname:gsub('^' .. vim.pesc(wiki_root) .. '/', '')
+      local lines = vim.api.nvim_buf_get_lines(0, 0, -1, false)
+      local summary
+      for _, line in ipairs(lines) do
+        -- Accept `#inbox: foo`, `# inbox: foo` (formatter may add space and treat as H1),
+        -- `inbox: foo` (bare), or `- inbox: foo` (list item).
+        local tagged = line:match '^%s*#?%s*inbox%s*:%s*(.+)$'
+          or line:match '^%s*%-%s*inbox%s*:%s*(.+)$'
+          or line:match '#inbox%s*:?%s*(.+)$'
+        if tagged and vim.trim(tagged) ~= '' and vim.trim(tagged) ~= '#inbox' then
+          summary = vim.trim(tagged):gsub('^#inbox%s*:?%s*', ''):gsub('^#%s*inbox%s*:?%s*', '')
+          break
+        end
+      end
+      if not summary or summary == '' then
+        summary = 'note captured from nvim: ' .. rel
+      end
+      vim.system({ inbox_add, 'user', summary }, { text = true }, function(res)
+        vim.schedule(function()
+          if res.code == 0 then
+            vim.notify('wiki: pushed → ' .. summary, vim.log.levels.INFO)
+          else
+            vim.notify('wiki: inbox_add failed: ' .. (res.stderr or 'unknown'), vim.log.levels.ERROR)
+          end
+        end)
+      end)
+    end
+
+    local function open_wiki_file(path)
+      vim.cmd('edit ' .. wiki_root .. path)
+    end
+
+    -- Run a wiki script in a bottom terminal split.
+    local function run_wiki_script(script_name, args)
+      local script = wiki_root .. '/.scripts/' .. script_name
+      if vim.fn.filereadable(script) == 0 then
+        vim.notify('wiki: script not found: ' .. script, vim.log.levels.ERROR)
+        return
+      end
+      vim.cmd 'botright 20split'
+      local cmd = { script }
+      vim.list_extend(cmd, args or {})
+      vim.fn.termopen(cmd, {
+        on_exit = function(_, code)
+          vim.schedule(function()
+            local lvl = code == 0 and vim.log.levels.INFO or vim.log.levels.WARN
+            vim.notify('wiki: ' .. script_name .. ' exit=' .. code, lvl)
+          end)
+        end,
+      })
+      vim.cmd 'startinsert'
+    end
+
+    -- User commands
+    vim.api.nvim_create_user_command('WikiInbox',      push_current_to_inbox, { desc = 'Push current buffer to wiki inbox' })
+    vim.api.nvim_create_user_command('WikiQueue',      function() open_wiki_file '/.inbox/queue.md'      end, { desc = 'Open wiki inbox queue' })
+    vim.api.nvim_create_user_command('WikiProposals',  function() open_wiki_file '/.inbox/proposals/'    end, { desc = 'Open Loop 7 proposals dir' })
+    vim.api.nvim_create_user_command('WikiVerdicts',   function() open_wiki_file '/.inbox/verdicts.md'   end, { desc = 'Open evaluator verdict log' })
+    vim.api.nvim_create_user_command('WikiDashboard',  function() run_wiki_script 'wiki_dashboard.sh'    end, { desc = 'Loop 7 dashboard' })
+    vim.api.nvim_create_user_command('WikiLint',       function() run_wiki_script 'wiki_lint.sh'         end, { desc = 'Wiki linter' })
+    vim.api.nvim_create_user_command('WikiHealth',     function() run_wiki_script 'wiki_health.sh'       end, { desc = 'Wiki health audit' })
+    vim.api.nvim_create_user_command('WikiEvaluator',  function() run_wiki_script 'wiki_evaluator.sh'    end, { desc = 'Loop 4 evaluator (deterministic + LLM)' })
+
+    -- Keymaps under <leader>x prefix (wiki eXecute — orthogonal to <leader>n obsidian namespace)
+    vim.keymap.set('n', '<leader>xi', push_current_to_inbox,                             { desc = 'Wiki push current → [i]nbox' })
+    vim.keymap.set('n', '<leader>xq', function() open_wiki_file '/.inbox/queue.md' end,   { desc = 'Wiki open [q]ueue' })
+    vim.keymap.set('n', '<leader>xp', function() open_wiki_file '/.inbox/proposals/' end, { desc = 'Wiki open [p]roposals' })
+    vim.keymap.set('n', '<leader>xv', function() open_wiki_file '/.inbox/verdicts.md' end, { desc = 'Wiki open [v]erdicts' })
+    vim.keymap.set('n', '<leader>xd', function() run_wiki_script 'wiki_dashboard.sh' end, { desc = 'Wiki [d]ashboard' })
+    vim.keymap.set('n', '<leader>xl', function() run_wiki_script 'wiki_lint.sh' end,      { desc = 'Wiki [l]int' })
+    vim.keymap.set('n', '<leader>xh', function() run_wiki_script 'wiki_health.sh' end,    { desc = 'Wiki [h]ealth audit' })
+    vim.keymap.set('n', '<leader>xe', function() run_wiki_script 'wiki_evaluator.sh' end, { desc = 'Wiki [e]valuator (Loop 4)' })
+
+    -- Auto-push on save when buffer contains `#inbox` tag (opt-in per-note).
+    -- Dedup handled by inbox_add.sh (case-insensitive substring on Open section).
+    vim.api.nvim_create_autocmd('BufWritePost', {
+      group = vim.api.nvim_create_augroup('wiki-inbox-bridge', { clear = true }),
+      pattern = {
+        wiki_root .. '/worknotes/*.md',
+        wiki_root .. '/worknotes/**/*.md',
+        wiki_root .. '/journal/*.md',
+        wiki_root .. '/journal/**/*.md',
+        wiki_root .. '/daily/*.md',
+        wiki_root .. '/retro/*.md',
+        wiki_root .. '/retro/**/*.md',
+      },
+      callback = function(ev)
+        local lines = vim.api.nvim_buf_get_lines(ev.buf, 0, -1, false)
+        for _, line in ipairs(lines) do
+          -- Match `#inbox`, `# inbox` (formatter-broken), or `inbox:` on its own line
+          if line:match '#%s*inbox' or line:match '^%s*inbox%s*:' or line:match '^%s*%-%s*inbox%s*:' then
+            push_current_to_inbox()
+            return
+          end
+        end
+      end,
+      desc = 'Auto-push #inbox-tagged notes to wiki queue on save',
     })
   end,
 }
