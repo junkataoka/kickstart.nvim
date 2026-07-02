@@ -45,10 +45,16 @@ return {
     { '<leader>xs', '<cmd>WikiSave<CR>',      desc = 'Wiki [s]ave session' },
   },
   cmd = {
-    -- Eager command registration so <leader>x* keys trigger lazy-load
+    -- Eager command registration so <leader>x* AND <leader>n* keys trigger lazy-load.
+    -- Without listing Md* here, pressing <leader>nw from a cold-start non-markdown
+    -- buffer fires :MdWorknote before the plugin loads → E492 / silent no-op.
+    -- (Regression discovered 2026-07-03: eager `keys=` alone is insufficient when
+    -- ft='markdown' gates config=function() and Md* commands live inside it.)
     'WikiInbox', 'WikiQueue', 'WikiProposals', 'WikiVerdicts',
     'WikiDashboard', 'WikiLint', 'WikiHealth', 'WikiEvaluator',
     'WikiToday', 'WikiSave',
+    'MdWorknote', 'MdJournal', 'MdCarryTasks', 'MdMeetings',
+    'MdProject', 'MdAddRepo', 'MdLinkProject', 'MdRetro', 'MdWin',
   },
   opts = {
     workspaces = {
@@ -1210,7 +1216,14 @@ return {
         vim.notify('wiki: script not found: ' .. script, vim.log.levels.ERROR)
         return
       end
-      vim.cmd 'botright 20split'
+      -- CRITICAL: create a fresh scratch buffer BEFORE the split so termopen()
+      -- can't hijack the user's current buffer. Without `enew`, botright split
+      -- can share the current buffer (esp. from a [No Name] window), and
+      -- termopen() then converts BOTH windows into the terminal.
+      vim.cmd 'botright 20new'
+      vim.bo.buftype  = 'nofile'
+      vim.bo.bufhidden = 'wipe'
+      vim.bo.swapfile = false
 
       -- Build shell command: run script, then show friendly prompt + wait for keypress.
       local shell_cmd = vim.fn.shellescape(script)
@@ -1224,11 +1237,14 @@ return {
           .. '; rc=$?; printf "\\n\\033[2m────────────────────────────────────────\\033[0m\\n"; '
           .. 'if [ $rc -eq 0 ]; then printf "\\033[32m✓ %s finished (exit 0)\\033[0m — " ' .. vim.fn.shellescape(script_name) .. '; '
           .. 'else printf "\\033[31m✗ %s failed (exit %d)\\033[0m — " ' .. vim.fn.shellescape(script_name) .. ' "$rc"; fi; '
-          .. 'printf "press any key to close\\n"; '
-          .. 'stty -icanon -echo min 1 2>/dev/null; dd bs=1 count=1 >/dev/null 2>&1; stty icanon echo 2>/dev/null; '
+          .. 'printf "press q to close (or any key + Enter)\\n"; '
+          -- Read ONE line (Enter-terminated) — reliable across nvim PTYs where
+          -- `stty -icanon` doesn't always take effect. `read _` avoids IFS split.
+          .. 'IFS= read -r _ 2>/dev/null || true; '
           .. 'exit $rc',
       }
       local term_buf = vim.api.nvim_get_current_buf()
+      local term_win = vim.api.nvim_get_current_win()
       vim.fn.termopen(wrapped, {
         on_exit = function(_, code)
           vim.schedule(function()
@@ -1241,13 +1257,23 @@ return {
           end)
         end,
       })
-      -- Also let user close early with q/Esc without waiting for the read.
-      vim.keymap.set({ 'n', 't' }, 'q', function()
+      -- Close early with q (normal mode) or <C-q> (terminal mode).
+      -- Terminal-mode `q` alone can't be intercepted — nvim sends it to the shell.
+      vim.keymap.set('n', 'q', function()
         if vim.api.nvim_buf_is_valid(term_buf) then
           vim.api.nvim_buf_delete(term_buf, { force = true })
         end
       end, { buffer = term_buf, desc = 'Close wiki script output' })
-      vim.cmd 'startinsert'
+      vim.keymap.set('t', '<C-q>', function()
+        if vim.api.nvim_buf_is_valid(term_buf) then
+          vim.api.nvim_buf_delete(term_buf, { force = true })
+        end
+      end, { buffer = term_buf, desc = 'Close wiki script output' })
+      -- Enter terminal mode so the "press any key" read works interactively.
+      if vim.api.nvim_win_is_valid(term_win) then
+        vim.api.nvim_set_current_win(term_win)
+        vim.cmd 'startinsert'
+      end
     end
 
     -- User commands
