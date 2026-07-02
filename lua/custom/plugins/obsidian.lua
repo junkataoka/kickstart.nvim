@@ -1271,11 +1271,15 @@ return {
     vim.keymap.set('n', '<leader>xe', function() run_wiki_script 'wiki_evaluator.sh' end, { desc = 'Wiki [e]valuator (Loop 4)' })
 
     -- <leader>xn — open (or create) today's worknote at worknotes/YYYY/MM/YYYY-MM-DD.md.
-    -- Auto-creates the month directory. If the file is new, seeds it with a header + hint.
+    -- Auto-creates the month directory. If the file is new, seeds it with frontmatter + header + hint.
+    -- L43 (2026-07-03): FM seed added — pre-L43, WikiToday produced FM-less files that tripped
+    -- wiki_lint.sh required-keys check (title/tags/created/updated). §V.D "evaluator is floor"
+    -- fix at authoring layer.
     local function open_today_worknote()
       local date = os.date '%Y-%m-%d'
       local year = os.date '%Y'
       local month = os.date '%m'
+      local time = os.date '%H:%M'
       local dir = wiki_root .. '/worknotes/' .. year .. '/' .. month
       local path = dir .. '/' .. date .. '.md'
       if vim.fn.isdirectory(dir) == 0 then vim.fn.mkdir(dir, 'p') end
@@ -1283,6 +1287,16 @@ return {
       vim.cmd('edit ' .. vim.fn.fnameescape(path))
       if is_new then
         local lines = {
+          '---',
+          'title: "' .. date .. '"',
+          'description: Daily work entry',
+          'author: junkataoka',
+          'tags:',
+          '  - work',
+          'created: "' .. date .. 'T' .. time .. '"',
+          'updated: "' .. date .. 'T' .. time .. '"',
+          '---',
+          '',
           '# ' .. date,
           '',
           '<!-- Tip: prefix any line with `#inbox:` to auto-push to the wiki queue on :w -->',
@@ -1291,7 +1305,7 @@ return {
           '',
         }
         vim.api.nvim_buf_set_lines(0, 0, -1, false, lines)
-        vim.api.nvim_win_set_cursor(0, { 5, 3 }) -- cursor after "## "
+        vim.api.nvim_win_set_cursor(0, { 15, 3 }) -- cursor after "## "
         vim.cmd 'startinsert!'
       end
     end
