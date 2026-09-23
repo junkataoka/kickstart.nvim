@@ -8,7 +8,6 @@ return {
   'Rawnly/gist.nvim',
   cmd = { 'GistCreate', 'GistCreateFromFile', 'GistsList' },
   dependencies = {
-    'nvim-telescope/telescope.nvim',
     'nvim-lua/plenary.nvim',
   },
   config = function()

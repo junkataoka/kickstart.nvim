@@ -13,24 +13,35 @@ return {
     vim.api.nvim_create_autocmd('LspAttach', {
       group = vim.api.nvim_create_augroup('kickstart-lsp-attach', { clear = true }),
       callback = function(event)
-        local map = function(keys, func, desc, mode)
+        local map = function(keys, func, desc, mode, opts)
           mode = mode or 'n'
-          vim.keymap.set(mode, keys, func, { buffer = event.buf, desc = 'LSP: ' .. desc })
+          opts = vim.tbl_extend('force', { buffer = event.buf, desc = 'LSP: ' .. desc }, opts or {})
+          vim.keymap.set(mode, keys, func, opts)
         end
 
-        map('gd', require('telescope.builtin').lsp_definitions, '[G]oto [D]efinition')
-        map('gr', require('telescope.builtin').lsp_references, '[G]oto [R]eferences')
-        map('gI', require('telescope.builtin').lsp_implementations, '[G]oto [I]mplementation')
-        map('<leader>D', require('telescope.builtin').lsp_type_definitions, 'Type [D]efinition')
-        map('<leader>ds', require('telescope.builtin').lsp_document_symbols, '[D]ocument [S]ymbols')
-        map('<leader>ws', require('telescope.builtin').lsp_dynamic_workspace_symbols, '[W]orkspace [S]ymbols')
+        local pick = function(name)
+          return function()
+            Snacks.picker[name]()
+          end
+        end
+
+        map('gd', pick 'lsp_definitions', '[G]oto [D]efinition')
+        map('gD', pick 'lsp_declarations', '[G]oto [D]eclaration')
+        -- nowait: avoid timeoutlen delay from Neovim's default grr/gri/gra maps
+        map('gr', pick 'lsp_references', '[G]oto [R]eferences', 'n', { nowait = true })
+        map('gI', pick 'lsp_implementations', '[G]oto [I]mplementation')
+        map('gy', pick 'lsp_type_definitions', '[G]oto T[y]pe Definition')
+        map('<leader>D', pick 'lsp_type_definitions', 'Type [D]efinition')
+        map('gai', pick 'lsp_incoming_calls', 'C[a]lls [I]ncoming (callers)')
+        map('gao', pick 'lsp_outgoing_calls', 'C[a]lls [O]utgoing (callees)')
+        map('<leader>ds', pick 'lsp_symbols', '[D]ocument [S]ymbols')
+        map('<leader>ws', pick 'lsp_workspace_symbols', '[W]orkspace [S]ymbols')
         map('<leader>rn', vim.lsp.buf.rename, '[R]e[n]ame')
         map('<leader>la', vim.lsp.buf.code_action, '[L]SP Code [A]ction', { 'n', 'x' })
-        map('gD', vim.lsp.buf.declaration, '[G]oto [D]eclaration')
         map('<leader>e', vim.diagnostic.open_float, 'Open [E]rror')
 
         local client = vim.lsp.get_client_by_id(event.data.client_id)
-        if client and client.supports_method(vim.lsp.protocol.Methods.textDocument_documentHighlight) then
+        if client and client:supports_method(vim.lsp.protocol.Methods.textDocument_documentHighlight, event.buf) then
           local highlight_augroup = vim.api.nvim_create_augroup('kickstart-lsp-highlight', { clear = false })
           vim.api.nvim_create_autocmd({ 'CursorHold', 'CursorHoldI' }, {
             buffer = event.buf,
@@ -53,7 +64,7 @@ return {
           })
         end
 
-        if client and client.supports_method(vim.lsp.protocol.Methods.textDocument_inlayHint) then
+        if client and client:supports_method(vim.lsp.protocol.Methods.textDocument_inlayHint, event.buf) then
           map('<leader>th', function()
             vim.lsp.inlay_hint.enable(not vim.lsp.inlay_hint.is_enabled { bufnr = event.buf })
           end, '[T]oggle Inlay [H]ints')
@@ -97,13 +108,13 @@ return {
         },
       },
       pyright = {
-        settings = {
-          python = {
-            venvPath = vim.fn.getcwd(),
-            venv = '.venv',
-          },
+        root_markers = {
+          { 'pyrightconfig.json', 'pyproject.toml', 'setup.py', 'setup.cfg' },
+          { '.git' },
+          { 'requirements.txt', 'Pipfile' },
         },
       },
+      jsonls = {},
     }
 
     local ensure_installed = vim.tbl_keys(servers or {})
@@ -113,14 +124,11 @@ return {
     })
     require('mason-tool-installer').setup { ensure_installed = ensure_installed }
 
-    require('mason-lspconfig').setup {
-      handlers = {
-        function(server_name)
-          local server = servers[server_name] or {}
-          server.capabilities = vim.tbl_deep_extend('force', {}, capabilities, server.capabilities or {})
-          require('lspconfig')[server_name].setup(server)
-        end,
-      },
-    }
+    vim.lsp.config('*', { capabilities = capabilities })
+    for server_name, server in pairs(servers) do
+      vim.lsp.config(server_name, server)
+    end
+
+    require('mason-lspconfig').setup()
   end,
 }

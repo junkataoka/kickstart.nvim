@@ -20,6 +20,12 @@ vim.o.spelllang = 'en_us'
 -- Nerd Font
 vim.g.have_nerd_font = true
 
+vim.filetype.add {
+  extension = {
+    jsonl = 'json',
+  },
+}
+
 -- Line numbers
 vim.opt.number = true
 vim.opt.relativenumber = true
@@ -74,7 +80,7 @@ vim.opt.wrap = true
 
 -- Ensure a Neovim server for lazygit edits
 if vim.v.servername == '' then
-  local server = string.format('%s/nvim-%d.sock', vim.fn.stdpath('cache'), vim.fn.getpid())
+  local server = string.format('%s/nvim-%d.sock', vim.fn.stdpath 'cache', vim.fn.getpid())
   vim.fn.serverstart(server)
 end
 vim.env.NVIM = vim.v.servername

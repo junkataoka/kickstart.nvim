@@ -7,7 +7,7 @@ return {
   dependencies = {
     'nvim-lua/plenary.nvim',
     'hrsh7th/nvim-cmp',
-    'nvim-telescope/telescope.nvim',
+    'folke/snacks.nvim',
     'nvim-treesitter/nvim-treesitter',
   },
   -- Register global keymaps eagerly so which-key shows them and they work
@@ -128,9 +128,9 @@ return {
       },
     },
 
-    -- Picker (telescope integration)
+    -- Picker (snacks integration)
     picker = {
-      name = 'telescope.nvim',
+      name = 'snacks.picker',
       note_mappings = {
         new = '<C-x>',
         insert_link = '<C-l>',
@@ -1119,12 +1119,15 @@ return {
             return
           end
 
-          -- gf: follow wiki link under cursor, fall back to built-in gf
+          -- gf: open URLs, follow wiki links, then fall back to built-in gf
           vim.keymap.set('n', 'gf', function()
+            if require('util.open_url').open_under_cursor() then
+              return
+            end
             if not follow_wiki_link() then
               vim.cmd 'normal! gf'
             end
-          end, { buffer = ev.buf, desc = 'Follow [[link]] or default gf' })
+          end, { buffer = ev.buf, desc = 'Open URL, [[link]], or file' })
 
           -- <CR>: follow wiki link under cursor in normal mode
           vim.keymap.set('n', '<CR>', function()

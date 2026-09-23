@@ -6,6 +6,9 @@ return {
     'rcarriga/nvim-notify',
   },
   opts = {
+    notify = {
+      enabled = false,
+    },
     lsp = {
       override = {
         ['vim.lsp.util.convert_input_to_markdown_lines'] = true,

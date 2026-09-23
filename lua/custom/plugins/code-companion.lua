@@ -1,6 +1,14 @@
 return {
   'olimorris/codecompanion.nvim',
   cmd = { 'CodeCompanion', 'CodeCompanionChat', 'CodeCompanionActions', 'CodeCompanionCmd' },
+  keys = {
+    { '<leader>cc', '<cmd>CodeCompanionChat Toggle<CR>', mode = { 'n', 'v' }, desc = '[C]odeCompanion: [C]hat toggle' },
+    { '<leader>ca', '<cmd>CodeCompanionActions<CR>', mode = { 'n', 'v' }, desc = '[C]odeCompanion: [A]ctions palette' },
+    { '<leader>ci', '<cmd>CodeCompanion<CR>', mode = 'n', desc = '[C]odeCompanion: [I]nline' },
+    { '<leader>ci', '<cmd>CodeCompanion<CR>', mode = 'v', desc = '[C]odeCompanion: [I]nline w/ selection' },
+    { '<leader>cp', '<cmd>CodeCompanionChat Add<CR>', mode = { 'n', 'v' }, desc = '[C]odeCompanion: [P]ush buffer/selection to chat' },
+    { '<leader>cq', ':CodeCompanion ', mode = 'n', desc = '[C]odeCompanion: [Q]uick prompt' },
+  },
   dependencies = {
     'nvim-lua/plenary.nvim',
     'nvim-treesitter/nvim-treesitter',
@@ -16,7 +24,10 @@ return {
           return require('codecompanion.adapters').extend('copilot', {
             schema = {
               model = {
-                default = 'claude-sonnet-4',
+                default = 'gpt-6-astra',
+              },
+              ['reasoning.effort'] = {
+                default = 'high',
               },
             },
           })

@@ -38,6 +38,15 @@ return {
     keymaps = {
       show_help = '<f1>',
     },
+    open_file_function = function(chosen_file, config, state)
+      local binary_exts = { pdf = true, doc = true, docx = true, xls = true, xlsx = true, ppt = true, pptx = true, key = true, numbers = true, pages = true }
+      local ext = (chosen_file:match '%.([^.]+)$' or ''):lower()
+      if binary_exts[ext] then
+        vim.system({ 'open', chosen_file }, { detach = true })
+        return
+      end
+      vim.cmd('edit ' .. vim.fn.fnameescape(chosen_file))
+    end,
   },
   -- 👇 if you use `open_for_directories=true`, this is recommended
   init = function()

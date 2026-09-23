@@ -14,9 +14,9 @@ return {
     vim.g.slime_python_ipython = 0
   end,
   keys = {
-    { '<leader>sc', '<Plug>SlimeConfig', desc = '[S]lime [C]onfig — pick target pane' },
-    { '<leader>ss', '<Plug>SlimeParagraphSend', desc = '[S]lime [S]end paragraph' },
-    { '<leader>ss', '<Plug>SlimeRegionSend', mode = 'v', desc = '[S]lime [S]end selection' },
-    { '<leader>sl', '<Plug>SlimeLineSend', desc = '[S]lime send [L]ine' },
+    { '<leader>Sc', '<Plug>SlimeConfig', desc = '[S]lime [C]onfig — pick target pane' },
+    { '<leader>Ss', '<Plug>SlimeParagraphSend', desc = '[S]lime [S]end paragraph' },
+    { '<leader>Ss', '<Plug>SlimeRegionSend', mode = 'v', desc = '[S]lime [S]end selection' },
+    { '<leader>Sl', '<Plug>SlimeLineSend', desc = '[S]lime send [L]ine' },
   },
 }

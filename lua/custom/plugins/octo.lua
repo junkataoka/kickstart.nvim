@@ -2,7 +2,7 @@ return {
   'pwntester/octo.nvim',
   dependencies = {
     'nvim-lua/plenary.nvim',
-    'nvim-telescope/telescope.nvim',
+    'folke/snacks.nvim',
     'nvim-tree/nvim-web-devicons',
   },
   cmd = 'Octo',
@@ -26,7 +26,7 @@ return {
       enable_builtin = true,
       default_remote = { 'upstream', 'origin' },
       default_merge_method = 'squash',
-      picker = 'telescope',
+      picker = 'snacks',
       comment_icon = '',
       outdated_icon = '󰅒 ',
       resolved_icon = ' ',
