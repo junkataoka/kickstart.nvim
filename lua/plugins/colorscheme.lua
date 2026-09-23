@@ -1,11 +1,26 @@
 return {
-  'folke/tokyonight.nvim',
+  'catppuccin/nvim',
+  name = 'catppuccin',
   priority = 1000,
   opts = {
-    transparent = false, -- solid bg: translucency behind text hurt markdown contrast
+    flavour = 'mocha',
+    transparent_background = false, -- translucency behind text hurts markdown contrast
+    no_italic = false,
+    styles = { comments = {} },
+    integrations = {
+      blink_cmp = true,
+      markview = true,
+      noice = true,
+      snacks = { enabled = true },
+      which_key = true,
+      gitsigns = true,
+      mason = true,
+      treesitter = true,
+      native_lsp = { enabled = true },
+    },
   },
-  init = function()
-    vim.cmd.colorscheme 'tokyonight-night'
-    vim.cmd.hi 'Comment gui=none'
+  config = function(_, opts)
+    require('catppuccin').setup(opts)
+    vim.cmd.colorscheme 'catppuccin-mocha'
   end,
 }
