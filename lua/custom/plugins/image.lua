@@ -1,9 +1,6 @@
 return {
   '3rd/image.nvim',
   ft = { 'markdown', 'vimwiki', 'norg', 'codecompanion' },
-  dependencies = {
-    'leafo/magick', -- Optional: for better image processing
-  },
   config = function()
     -- Vault root for resolving image paths that are relative to the vault,
     -- not the current document (e.g. "attachments/foo.png" from a deeply nested note).
@@ -11,6 +8,7 @@ return {
 
     require('image').setup {
       backend = 'kitty',
+      processor = 'magick_cli', -- ImageMagick CLI; avoids the luarocks `magick` rock
       integrations = {
         markdown = {
           enabled = true,
@@ -50,7 +48,7 @@ return {
       max_width_window_percentage = 80,
       max_height_window_percentage = 30,
       window_overlap_clear_enabled = true,
-      window_overlap_clear_ft_ignore = { 'cmp_menu', 'cmp_docs', '' },
+      window_overlap_clear_ft_ignore = { 'blink-cmp-menu', 'blink-cmp-documentation', '' },
       editor_only_render_when_focused = false, -- auto show/hide images when the editor gains/looses focus
       tmux_show_only_in_active_window = false, -- auto show/hide images in the correct Tmux window (needs visual-activity off)
       hijack_file_patterns = { '*.png', '*.jpg', '*.jpeg', '*.gif', '*.webp' }, -- render image files as images when opened

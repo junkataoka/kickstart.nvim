@@ -13,8 +13,7 @@ vim.api.nvim_create_autocmd({ 'BufEnter', 'CursorHold', 'CursorHoldI', 'FocusGai
   pattern = { '*' },
 })
 
--- Spell checking
-vim.o.spell = true
+-- Spell checking: prose filetypes only (see autocmds.lua)
 vim.o.spelllang = 'en_us'
 
 -- Nerd Font

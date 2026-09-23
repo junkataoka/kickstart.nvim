@@ -50,9 +50,9 @@ return {
   opts = {
     bigfile = { enabled = true }, -- disable expensive features on huge files
     quickfile = { enabled = true }, -- render the file before plugins load
-    notifier = { enabled = false }, -- noice already handles this
+    notifier = { enabled = true }, -- vim.notify backend (noice.notify is off)
     statuscolumn = { enabled = false },
-    indent = { enabled = false }, -- indent-blankline already handles this
+    indent = { enabled = true },
     picker = {
       enabled = true,
       ui_select = true,

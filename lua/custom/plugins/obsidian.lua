@@ -6,7 +6,6 @@ return {
   ft = 'markdown',
   dependencies = {
     'nvim-lua/plenary.nvim',
-    'hrsh7th/nvim-cmp',
     'folke/snacks.nvim',
     'nvim-treesitter/nvim-treesitter',
   },

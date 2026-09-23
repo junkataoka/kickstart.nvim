@@ -17,7 +17,7 @@ vim.opt.rtp:prepend(lazypath)
 
 -- Setup lazy.nvim
 require('lazy').setup({
-  rocks = { enabled = true, hererocks = true },
+  rocks = { enabled = false },
 
   -- Import core plugins from lua/plugins/
   { import = 'plugins' },
