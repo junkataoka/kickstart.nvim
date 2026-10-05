@@ -8,8 +8,22 @@ local function pick_timers()
   for _, timer in ipairs(pomo.get_all_timers()) do
     table.insert(items, { text = tostring(timer), timer_id = timer.id })
   end
+  -- Timers are per Neovim instance; offer to start one when none are running here.
   if #items == 0 then
-    vim.notify('No active timers', vim.log.levels.INFO, { title = 'pomo' })
+    local choices = {
+      { label = 'Pomodoro session (4x25m)', cmd = 'TimerSession pomodoro' },
+      { label = '25m Work', cmd = 'TimerStart 25m Work' },
+      { label = '5m Break', cmd = 'TimerStart 5m Break' },
+      { label = '15m Long Break', cmd = 'TimerStart 15m Long Break' },
+    }
+    vim.ui.select(choices, {
+      prompt = 'No active timers in this Neovim. Start one:',
+      format_item = function(c) return c.label end,
+    }, function(choice)
+      if choice then
+        vim.cmd(choice.cmd)
+      end
+    end)
     return
   end
   Snacks.picker.pick {
