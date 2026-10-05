@@ -47,3 +47,14 @@ vim.keymap.set('n', '<leader>wk', ':resize +20<CR>', { silent = true, desc = 'In
 
 -- Increment number
 vim.keymap.set('n', '<C-s>', '<C-a>', { desc = 'Increment number' })
+
+-- Copy Markdown as rich text (HTML) for pasting into Loop/Teams/Outlook
+vim.api.nvim_create_user_command('CopyRich', function(opts)
+  if opts.range == 0 then
+    require('util.rich_copy').copy()
+  else
+    require('util.rich_copy').copy(opts.line1, opts.line2)
+  end
+end, { range = true, desc = 'Copy Markdown as rich text (HTML)' })
+vim.keymap.set('n', '<leader>my', '<cmd>CopyRich<CR>', { desc = '[M]arkdown [y]ank as rich text' })
+vim.keymap.set('x', '<leader>my', ':CopyRich<CR>', { silent = true, desc = '[M]arkdown [y]ank selection as rich text' })
