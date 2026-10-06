@@ -14,16 +14,6 @@ return {
         return ''
       end
 
-      -- Pomodoro timer (pomo.nvim); only shown once the plugin is loaded
-      local function pomodoro()
-        local ok, pomo = pcall(require, 'pomo')
-        if not ok then
-          return ''
-        end
-        local timer = pomo.get_first_to_finish()
-        return timer and ('󰄉 ' .. tostring(timer)) or ''
-      end
-
       require('lualine').setup {
         options = {
           theme = 'catppuccin-mocha',
@@ -35,7 +25,6 @@ return {
           lualine_b = { 'branch', 'diff', 'diagnostics' },
           lualine_c = { 'filename' },
           lualine_x = {
-            { pomodoro, cond = function() return package.loaded['pomo'] ~= nil end },
             { python_venv, cond = function() return vim.bo.filetype == 'python' end },
             'encoding',
             'fileformat',

@@ -58,3 +58,6 @@ vim.api.nvim_create_user_command('CopyRich', function(opts)
 end, { range = true, desc = 'Copy Markdown as rich text (HTML)' })
 vim.keymap.set('n', '<leader>my', '<cmd>CopyRich<CR>', { desc = '[M]arkdown [y]ank as rich text' })
 vim.keymap.set('x', '<leader>my', ':CopyRich<CR>', { silent = true, desc = '[M]arkdown [y]ank selection as rich text' })
+
+-- Pomodoro: control tmux-pomodoro-plus timer (<leader>P*, :Pomodoro)
+require('util.pomodoro').setup()
