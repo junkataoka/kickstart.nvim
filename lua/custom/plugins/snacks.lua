@@ -17,6 +17,43 @@ return {
     { '<leader>sz', function() Snacks.picker.zoxide() end, desc = '[S]earch with [Z]oxide' },
     { '<leader>sp', function() Snacks.picker.projects() end, desc = '[S]earch [P]rojects' },
 
+    -- Copilot CLI session artifacts (~/.copilot/session-state/<id>/files/*), newest first
+    {
+      '<leader>sc',
+      function()
+        local root = vim.fn.expand '~/.copilot/session-state'
+        local paths = vim.fn.glob(root .. '/*/files/**/*', false, true)
+        local items = {}
+        for _, p in ipairs(paths) do
+          local stat = vim.uv.fs_stat(p)
+          if stat and stat.type == 'file' then
+            local rel = p:sub(#root + 2)
+            table.insert(items, { file = p, text = rel, mtime = stat.mtime.sec })
+          end
+        end
+        table.sort(items, function(a, b) return a.mtime > b.mtime end)
+        Snacks.picker.pick {
+          title = 'Copilot session files',
+          items = items,
+          format = 'file',
+          sort = { fields = { 'score:desc', 'idx' } },
+        }
+      end,
+      desc = '[S]earch [C]opilot session files',
+    },
+    {
+      '<leader>sC',
+      function()
+        Snacks.picker.grep {
+          title = 'Grep Copilot session files',
+          dirs = { vim.fn.expand '~/.copilot/session-state' },
+          glob = '*/files/**',
+          hidden = true,
+        }
+      end,
+      desc = '[S]earch [C]opilot session files (grep)',
+    },
+
     -- Grep
     { '<leader>sg', function() Snacks.picker.grep() end, desc = '[S]earch by [G]rep' },
     { '<leader>sw', function() Snacks.picker.grep_word() end, desc = '[S]earch current [W]ord', mode = { 'n', 'x' } },
