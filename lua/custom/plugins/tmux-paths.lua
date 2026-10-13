@@ -1,9 +1,7 @@
 return {
   'junkataoka/tmux-paths.nvim',
+  dir = '~/projects/tmux-paths.nvim', -- local dev copy; remove after pushing upstream
   dependencies = { 'folke/snacks.nvim' },
-  cmd = 'TmuxPaths',
-  keys = {
-    { '<leader>so', '<cmd>TmuxPaths<cr>', desc = '[S]earch paths from [O]ther tmux pane' },
-  },
+  cmd = 'TmuxPaths', -- <leader>so now opens util.recent_files (see snacks.lua)
   opts = {},
 }

@@ -16,6 +16,8 @@ return {
     { '<leader>sn', function() Snacks.picker.files { cwd = vim.fn.stdpath 'config' } end, desc = '[S]earch [N]eovim files' },
     { '<leader>sz', function() Snacks.picker.zoxide() end, desc = '[S]earch with [Z]oxide' },
     { '<leader>sp', function() Snacks.picker.projects() end, desc = '[S]earch [P]rojects' },
+    -- Newest files on disk under ALL tmux pane cwds + Copilot session files; see lua/util/recent_files.lua
+    { '<leader>so', function() require('util.recent_files').pick() end, desc = '[S]earch newest files from tmux panes/c[O]pilot' },
 
     -- Copilot CLI session artifacts (~/.copilot/session-state/<id>/files/*), newest first
     {
@@ -95,6 +97,12 @@ return {
       ui_select = true,
       formatters = {
         file = { filename_first = true },
+      },
+      -- <a-y>/<a-Y>: copy selected file path (relative to cwd / absolute) in every picker; see lua/util/picker_paths.lua
+      actions = require('util.picker_paths').actions,
+      win = {
+        input = { keys = require('util.picker_paths').keys },
+        list = { keys = require('util.picker_paths').keys },
       },
       sources = {
         files = { hidden = true },

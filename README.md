@@ -14,6 +14,33 @@ A starting point for Neovim that is:
 
 ## Installation
 
+### Newest files from tmux panes and Copilot sessions
+
+Press `<leader>so` to pick files on disk, newest first, from:
+
+- the current working directory of every tmux pane (all sessions and windows,
+  including the current pane), plus Neovim's cwd (the only root outside tmux);
+- Copilot CLI session files under `~/.copilot/session-state` (`*/files/**` and
+  `*/plan.md`).
+
+Files are listed with `rg --files --hidden`, so never-opened, hidden and
+git-untracked files are included; `.gitignore` rules and `.git`,
+`node_modules`, `.venv`, cache dirs are excluded. Order is creation time
+(birthtime) where the filesystem reports it, else modification time. There is
+no count limit. Nested pane directories are scanned once, `$HOME` is scanned
+top-level only, and parents of `$HOME` (e.g. `/`) are skipped with a notice.
+tmux/rg/stat errors are shown via `vim.notify`. `:TmuxPaths` is still available
+for paths printed in nearby panes.
+
+In any Snacks picker (this one, `<leader>sf`, grep, …) press `<A-y>` to copy the
+selected file path relative to Neovim's cwd (`../` when outside it) or `<A-Y>`
+for the absolute, symlink-resolved path. Works in insert and normal mode, copies
+to the unnamed register and the `+` clipboard, notifies, and keeps the picker
+open; multiple selected items are copied one per line.
+
+Test: `nvim --headless -u NONE -l nvim/tests/recent_files.lua`
+from the config repo.
+
 ### Install Neovim
 
 Kickstart.nvim targets _only_ the latest
