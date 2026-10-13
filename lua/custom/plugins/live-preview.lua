@@ -12,12 +12,20 @@ local function free_port(start)
   end
 end
 
+-- Server root is cwd, so files outside it (e.g. ~/.copilot/session-state/*.md)
+-- 404. For those, serve the file's own directory instead (dynamic_root).
+local function outside_cwd(file)
+  local real = vim.uv.fs_realpath(file)
+  local cwd = vim.uv.fs_realpath(vim.uv.cwd() or '')
+  return not (real and cwd and vim.fs.relpath(cwd, real))
+end
+
 local function start(file)
   if file then vim.cmd.edit(vim.fn.fnameescape(file)) end
   local lp = require 'livepreview'
-  if not lp.is_running() then
-    require('livepreview.config').set { port = free_port(5500) }
-  end
+  local cfg = { dynamic_root = outside_cwd(vim.api.nvim_buf_get_name(0)) }
+  if not lp.is_running() then cfg.port = free_port(5500) end
+  require('livepreview.config').set(cfg)
   vim.cmd 'LivePreview start'
 end
 
