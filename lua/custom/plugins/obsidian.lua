@@ -100,19 +100,15 @@ return {
     -- Where new notes go by default
     new_notes_location = 'current_dir',
 
-    -- Note frontmatter (YAML)
-    frontmatter = {
-      func = function(note)
-        local out = { id = note.id, aliases = note.aliases, tags = note.tags }
-        -- Keep any extra metadata the user has added
-        if note.metadata ~= nil and not vim.tbl_isempty(note.metadata) then
-          for k, v in pairs(note.metadata) do
-            out[k] = v
-          end
-        end
-        return out
-      end,
-    },
+    -- Note frontmatter (YAML): obsidian.nvim must NOT rewrite it on save. Its
+    -- serializer re-orders keys, injects id/aliases and strips the quotes the
+    -- wiki schema requires (~/notes-md/AGENTS.md "Canonical quoting"), which
+    -- scripts grep for. Wiki scripts/templates own frontmatter instead.
+    frontmatter = { enabled = false },
+
+    -- New notes (:Obsidian new, link-follow creation) start from a wiki-shaped
+    -- template (templates/note.md) instead of obsidian's id/aliases default.
+    note = { template = 'note.md' },
 
     -- Templates
     templates = {
