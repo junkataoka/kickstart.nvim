@@ -8,6 +8,9 @@ return {
       lint.linters_by_ft = {
         markdown = { 'markdownlint' },
       }
+      -- MD013 (line-length) flags almost every prose line in notes and
+      -- session files and can't be auto-fixed; the rest are fixed on save.
+      lint.linters.markdownlint.args = { '--stdin', '--disable', 'MD013' }
 
       -- To allow other plugins to add linters to require('lint').linters_by_ft,
       -- instead set linters_by_ft like this:

@@ -23,7 +23,9 @@ return {
         lsp_format_opt = 'fallback'
       end
       return {
-        timeout_ms = 500,
+        -- markdown runs markdownlint --fix + prettier (~0.15s each); 500ms
+        -- timed out under load, skipping fixes and leaving lint warnings.
+        timeout_ms = vim.bo[bufnr].filetype == 'markdown' and 2000 or 500,
         lsp_format = lsp_format_opt,
       }
     end,
