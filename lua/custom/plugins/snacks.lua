@@ -1,6 +1,28 @@
 -- Snacks.nvim — dashboard, indent guides, scope, statuscolumn, and small utilities.
 -- Currently we only enable the modules we want; other modules stay off so this
 -- doesn't conflict with existing plugins (lualine, gitsigns, noice, etc).
+
+-- zoxide/projects: <CR> cds and opens files there. Built-in `cd` leaves the
+-- picker open; built-in `load_session` replaces all windows. <A-s> keeps it.
+local dir_pick = {
+  confirm = function(picker, item)
+    picker:close()
+    if not item then return end
+    local dir = Snacks.picker.util.dir(item)
+    vim.fn.chdir(dir)
+    vim.notify('cwd: ' .. vim.fn.fnamemodify(dir, ':~'))
+    Snacks.picker.files()
+  end,
+  -- ~/.config/nvim is a symlink into ~/projects/config: show each dir once
+  transform = function(item, ctx)
+    ctx.meta.seen = ctx.meta.seen or {}
+    local real = vim.uv.fs_realpath(item.file) or item.file
+    if ctx.meta.seen[real] then return false end
+    ctx.meta.seen[real] = true
+  end,
+  win = { input = { keys = { ['<a-s>'] = { 'load_session', mode = { 'n', 'i' } } } } },
+}
+
 return {
   'folke/snacks.nvim',
   priority = 1000,
@@ -108,7 +130,8 @@ return {
         files = { hidden = true },
         grep = { hidden = true },
         grep_word = { hidden = true },
-        zoxide = { confirm = 'cd' },
+        zoxide = dir_pick,
+        projects = dir_pick,
       },
     },
     lazygit = {
