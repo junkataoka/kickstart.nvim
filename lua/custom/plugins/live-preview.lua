@@ -20,10 +20,13 @@ local function outside_cwd(file)
   return not (real and cwd and vim.fs.relpath(cwd, real))
 end
 
+local previewed -- file the running server was started for
+
 local function start(file)
   if file then vim.cmd.edit(vim.fn.fnameescape(file)) end
   local lp = require 'livepreview'
-  local cfg = { dynamic_root = outside_cwd(vim.api.nvim_buf_get_name(0)) }
+  previewed = vim.api.nvim_buf_get_name(0)
+  local cfg = { dynamic_root = outside_cwd(previewed) }
   if not lp.is_running() then cfg.port = free_port(5500) end
   require('livepreview.config').set(cfg)
   vim.cmd 'LivePreview start'
@@ -49,13 +52,15 @@ return {
     {
       '<leader>mp',
       function()
-        if require('livepreview').is_running() then
+        -- Server root is fixed at start; on another file, restart (re-rooting
+        -- if needed) instead of closing, else the old tab 404s.
+        if require('livepreview').is_running() and vim.api.nvim_buf_get_name(0) == previewed then
           vim.cmd 'LivePreview close'
         else
           start()
         end
       end,
-      desc = '[M]arkdown [P]review toggle',
+      desc = '[M]arkdown [P]review toggle (restarts on other file)',
       ft = 'markdown',
     },
     { '<leader>mP', pick, desc = '[M]arkdown [P]review pick file' },
