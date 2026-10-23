@@ -27,6 +27,7 @@ return {
   'folke/snacks.nvim',
   priority = 1000,
   lazy = false,
+  init = function() require('util.lazygit').setup() end,
   keys = {
     { '<leader>lg', function() Snacks.lazygit() end, desc = 'LazyGit' },
 

@@ -82,13 +82,17 @@ function M.plan(dirs, home)
       scans[#scans + 1] = { root = root, args = { '--max-depth', '1' } }
       notes[#notes + 1] = ('%s scanned top-level only ($HOME)'):format(root)
     else
-      local nested = false
-      for _, s in ipairs(scans) do
-        nested = nested or (s.root ~= home and contains(s.root, root))
+      -- Every pane dir gets its own scan, so a nested dir that the parent's ignore
+      -- rules hide (e.g. a git worktree under an excluded .worktrees/) still shows up.
+      -- The parent skips it via an anchored glob to avoid scanning it twice.
+      local args = {}
+      for _, other in ipairs(roots) do
+        if other ~= root and other ~= home and contains(root, other) then
+          local rel = other:sub(#root + 2):gsub('[%[%]%*%?{}!\\]', '\\%0')
+          vim.list_extend(args, { '--glob', '!/' .. rel })
+        end
       end
-      if not nested then
-        scans[#scans + 1] = { root = root, args = {} }
-      end
+      scans[#scans + 1] = { root = root, args = args }
     end
   end
   local copilot = realpath(M.config.copilot_root)

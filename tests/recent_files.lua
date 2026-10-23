@@ -21,7 +21,8 @@ end
 local A, B, C = fx .. '/proj a', fx .. '/proj b', fx .. '/copilot'
 local home = fx .. '/home'
 sh { 'git', 'init', '-q', A }
-write(A .. '/.gitignore', 'ignored.log')
+vim.fn.writefile({ 'ignored.log', 'wt/' }, A .. '/.gitignore')
+write(A .. '/wt/inside.md') -- ignored by A, but a pane is open there (like a git worktree)
 write(A .. '/ignored.log')
 write(A .. '/node_modules/dep.js')
 write(A .. '/.cache/blob')
@@ -42,7 +43,7 @@ vim.fn.writefile({ 'modified later' }, B .. '/old.txt', 'a') -- newer mtime, old
 -- Fake tmux: current pane in A, A/sub in another window, B in a second session, $HOME and its parents
 local fake = fx .. '/tmux'
 local panes = fx .. '/panes.txt'
-vim.fn.writefile({ A, A .. '/sub', B, home, fx, '/' }, panes)
+vim.fn.writefile({ A, A .. '/sub', A .. '/wt', B, home, fx, '/' }, panes)
 vim.fn.writefile({ '#!/bin/sh', '[ -f "' .. fx .. '/fail" ] && { echo "no server running" >&2; exit 1; }', 'case "$*" in *"list-panes -a"*) cat "' .. panes .. '";; *) exit 2;; esac' }, fake)
 sh { 'chmod', '+x', fake }
 
@@ -83,8 +84,11 @@ local ok, err = xpcall(function()
   local skipped = table.concat(r.notes, '\n')
   assert(skipped:find('skipped ' .. real(fx), 1, true) and skipped:find('skipped /', 1, true), skipped)
   assert(#r.items == vim.tbl_count(ix), 'items must be deduplicated')
+  assert(ix[real(A) .. '/wt/inside.md'], 'pane dir ignored by parent repo must still be scanned')
   local scans = rf.plan({ A, A .. '/sub', B, B }, home)
-  assert(#scans == 3, 'nested/duplicate roots must collapse (A, B, copilot)')
+  assert(#scans == 4, 'duplicates collapse; nested dirs get own scan (A, A/sub, B, copilot)')
+  local scan_a = vim.iter(scans):find(function(s) return s.root == real(A) end)
+  assert(scan_a and vim.tbl_contains(scan_a.args, '!/sub'), 'parent must skip nested pane dir: ' .. vim.inspect(scans))
   for i = 2, #r.items do
     assert(r.items[i - 1].time >= r.items[i].time, 'newest first')
   end
