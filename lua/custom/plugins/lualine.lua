@@ -22,7 +22,18 @@ return {
         },
         sections = {
           lualine_a = { 'mode' },
-          lualine_b = { 'branch', 'diff', 'diagnostics' },
+          lualine_b = {
+            'branch',
+            -- Counts from gitsigns (already computed) instead of lualine running git diff
+            {
+              'diff',
+              source = function()
+                local s = vim.b.gitsigns_status_dict
+                return s and { added = s.added, modified = s.changed, removed = s.removed } or nil
+              end,
+            },
+            'diagnostics',
+          },
           lualine_c = { 'filename' },
           lualine_x = {
             { python_venv, cond = function() return vim.bo.filetype == 'python' end },

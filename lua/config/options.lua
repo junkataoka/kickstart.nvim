@@ -16,6 +16,12 @@ vim.api.nvim_create_autocmd({ 'BufEnter', 'CursorHold', 'CursorHoldI', 'FocusGai
 -- Spell checking: prose filetypes only (see autocmds.lua)
 vim.o.spelllang = 'en_us'
 
+-- Diff: histogram aligns moved/reordered blocks better than myers; higher
+-- linematch pairs up more partially-changed lines (0.12 already adds inline:char)
+vim.opt.diffopt:append { 'algorithm:histogram' }
+vim.opt.diffopt:remove { 'linematch:40' }
+vim.opt.diffopt:append { 'linematch:60' }
+
 -- Nerd Font
 vim.g.have_nerd_font = true
 

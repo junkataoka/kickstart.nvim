@@ -27,9 +27,43 @@ return {
   'folke/snacks.nvim',
   priority = 1000,
   lazy = false,
-  init = function() require('util.lazygit').setup() end,
+  init = function()
+    require('util.lazygit').setup()
+    require('util.gh_account').setup()
+  end,
   keys = {
+    -- Git: lazygit = porcelain, pickers = quick lookups (<cr> on a commit/branch acts on it)
+    { '<leader>gg', function() Snacks.lazygit() end, desc = 'Lazy[g]it' },
     { '<leader>lg', function() Snacks.lazygit() end, desc = 'LazyGit' },
+    { '<leader>gs', function() Snacks.picker.git_status() end, desc = 'Git [s]tatus' },
+    { '<leader>gb', function() Snacks.picker.git_branches() end, desc = 'Git [b]ranches' },
+    { '<leader>gl', function() Snacks.picker.git_log() end, desc = 'Git [l]og' },
+    { '<leader>gf', function() Snacks.picker.git_log_file() end, desc = 'Git log [f]ile' },
+    { '<leader>gL', function() Snacks.picker.git_log_line() end, desc = 'Git log [L]ine' },
+    { '<leader>gd', function() Snacks.picker.git_diff() end, desc = 'Git [d]iff hunks' },
+    { '<leader>gS', function() Snacks.picker.git_stash() end, desc = 'Git [S]tash' },
+    { '<leader>go', function() Snacks.gitbrowse() end, mode = { 'n', 'x' }, desc = 'Git [o]pen on GitHub' },
+    {
+      '<leader>gy',
+      function()
+        Snacks.gitbrowse {
+          open = function(url)
+            vim.fn.setreg('+', url)
+            Snacks.notify('Copied ' .. url)
+          end,
+          notify = false,
+        }
+      end,
+      mode = { 'n', 'x' },
+      desc = 'Git [y]ank GitHub URL',
+    },
+
+    -- GitHub (Snacks.gh): <cr> = actions (view, diff, comment, review, checkout, merge…)
+    { '<leader>gp', function() Snacks.picker.gh_pr() end, desc = 'GitHub [p]ull requests' },
+    { '<leader>gP', function() Snacks.picker.gh_pr { state = 'all' } end, desc = 'GitHub [P]ull requests (all)' },
+    { '<leader>gr', function() Snacks.picker.gh_pr { search = 'review-requested:@me' } end, desc = 'GitHub PRs awaiting my [r]eview' },
+    { '<leader>gi', function() Snacks.picker.gh_issue() end, desc = 'GitHub [i]ssues' },
+    { '<leader>gI', function() Snacks.picker.gh_issue { state = 'all' } end, desc = 'GitHub [I]ssues (all)' },
 
     -- Files / buffers
     { '<leader>sf', function() Snacks.picker.smart() end, desc = '[S]earch [F]iles (smart)' },
@@ -139,6 +173,8 @@ return {
       configure = false, -- we manage ~/.config/lazygit/config.yml ourselves
       win = { style = 'lazygit' },
     },
+    gh = {}, -- GitHub PRs/issues/reviews via gh CLI (account: lua/util/gh_account.lua)
+    gitbrowse = {},
 
     dashboard = {
       preset = {

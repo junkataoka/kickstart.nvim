@@ -57,6 +57,18 @@ return {
         end, { desc = 'git [D]iff against last commit' })
         -- Toggles
         map('n', '<leader>ht', gitsigns.toggle_current_line_blame, { desc = 'git [t]oggle blame line' })
+        map('n', '<leader>hq', function() gitsigns.setqflist 'all' end, { desc = 'git hunks (all files) to [q]uickfix' })
+        map('n', '<leader>gB', gitsigns.blame, { desc = 'Git [B]lame buffer' })
+        -- Text object: dih / vih / yih operate on the hunk under the cursor
+        map({ 'o', 'x' }, 'ih', gitsigns.select_hunk, { desc = 'git hunk' })
+        -- Unified diff in the buffer (like lazygit's delta view): deleted lines
+        -- inline as virtual text, changed lines + changed words highlighted
+        map('n', '<leader>hu', function()
+          local on = not require('gitsigns.config').config.linehl
+          gitsigns.toggle_linehl(on)
+          gitsigns.toggle_word_diff(on)
+          gitsigns.toggle_deleted(on)
+        end, { desc = 'git toggle [u]nified inline diff' })
       end,
     },
   },
