@@ -53,7 +53,7 @@ return {
     'WikiDashboard', 'WikiLint', 'WikiHealth', 'WikiEvaluator',
     'WikiToday', 'WikiSave',
     'MdWorknote', 'MdJournal', 'MdCarryTasks', 'MdMeetings',
-    'MdProject', 'MdAddRepo', 'MdLinkProject', 'MdRetro', 'MdWin',
+    'MdProject', 'MdAddRepo', 'MdLinkProject', 'MdRetro', 'MdWin', 'MdDue',
   },
   opts = {
     workspaces = {
@@ -986,6 +986,155 @@ return {
     ---------------------------------------------------------------------------
 
     ---------------------------------------------------------------------------
+    -- Task due dates — Obsidian Tasks format: `- [ ] task 📅 YYYY-MM-DD`
+    ---------------------------------------------------------------------------
+    local DUE_ICON = '📅'
+    local DUE_PAT = '%s*' .. DUE_ICON .. '%s*%d%d%d%d%-%d%d%-%d%d'
+    local CARRY_LINK_PAT = '%s*%[%[worknotes/%d+/%d+/%d+|from %d%d%d%d%-%d%d%-%d%d%]%]%s*$'
+
+    -- Parse user input into YYYY-MM-DD. Accepts: YYYY-MM-DD, MM-DD, M/D,
+    -- today/tod, tomorrow/tom, +Nd/+Nw/+Nm (or bare N = days), mon..sun.
+    local function parse_due(input)
+      input = vim.trim((input or ''):lower())
+      local now = os.date '*t'
+      local today = { year = now.year, month = now.month, day = now.day, hour = 12 }
+      local function fmt(t)
+        return os.date('%Y-%m-%d', os.time(t))
+      end
+      local function offset(days, months)
+        local t = vim.deepcopy(today)
+        t.day = t.day + (days or 0)
+        t.month = t.month + (months or 0)
+        return fmt(t)
+      end
+
+      if input == 'today' or input == 'tod' then
+        return offset(0)
+      elseif input == 'tomorrow' or input == 'tom' then
+        return offset(1)
+      end
+
+      local n, unit = input:match '^%+?(%d+)([dwm]?)$'
+      if n and not input:match '^%d%d%d%d' then
+        n = tonumber(n)
+        if unit == 'w' then
+          return offset(n * 7)
+        elseif unit == 'm' then
+          return offset(0, n)
+        end
+        return offset(n)
+      end
+
+      local wdays = { sun = 1, mon = 2, tue = 3, wed = 4, thu = 5, fri = 6, sat = 7 }
+      local wd = wdays[input:sub(1, 3)]
+      if wd and input:match '^%a+$' then
+        local diff = (wd - now.wday) % 7
+        return offset(diff == 0 and 7 or diff)
+      end
+
+      local y, m, d = input:match '^(%d%d%d%d)%-(%d%d?)%-(%d%d?)$'
+      if not y then
+        m, d = input:match '^(%d%d?)[%-/](%d%d?)$'
+        if m then
+          y = now.year
+          local t = { year = y, month = tonumber(m), day = tonumber(d), hour = 12 }
+          if os.time(t) < os.time(today) then
+            y = y + 1
+          end
+        end
+      end
+      if y then
+        local t = { year = tonumber(y), month = tonumber(m), day = tonumber(d), hour = 12 }
+        local out = fmt(t)
+        -- Reject overflowed dates like 02-31
+        if tonumber(out:sub(6, 7)) == t.month and tonumber(out:sub(9, 10)) == t.day then
+          return out
+        end
+      end
+      return nil
+    end
+
+    -- Return line with due date set (or removed when date is nil). The due
+    -- field is placed before a trailing carry-over link so carry keeps working.
+    local function apply_due(line, date)
+      line = line:gsub(DUE_PAT, '')
+      if not date then
+        return line
+      end
+      local s = line:find(CARRY_LINK_PAT)
+      local due = ' ' .. DUE_ICON .. ' ' .. date
+      if s then
+        return line:sub(1, s - 1) .. due .. line:sub(s)
+      end
+      return (line:gsub('%s*$', '')) .. due
+    end
+
+    local function set_due_date(arg)
+      local buf = vim.api.nvim_get_current_buf()
+      local row = vim.api.nvim_win_get_cursor(0)[1]
+      local line = vim.api.nvim_buf_get_lines(buf, row - 1, row, false)[1] or ''
+      if not line:match '^%s*[%-%*%+] %[.%] ' then
+        vim.notify('Not a task line', vim.log.levels.WARN)
+        return
+      end
+
+      local function commit(input)
+        if input == nil then
+          return
+        end
+        local date
+        if vim.trim(input) ~= '' and vim.trim(input) ~= '-' then
+          date = parse_due(input)
+          if not date then
+            vim.notify('Unrecognized date: ' .. input, vim.log.levels.ERROR)
+            return
+          end
+        end
+        vim.api.nvim_buf_set_lines(buf, row - 1, row, false, { apply_due(line, date) })
+      end
+
+      if arg and arg ~= '' then
+        return commit(arg)
+      end
+      local current = line:match(DUE_ICON .. '%s*(%d%d%d%d%-%d%d%-%d%d)') or ''
+      vim.ui.input({
+        prompt = 'Due (YYYY-MM-DD, MM-DD, today, tom, +3d, +2w, fri; empty=clear): ',
+        default = current,
+      }, commit)
+    end
+
+    vim.api.nvim_create_user_command('MdDue', function(o)
+      set_due_date(o.args)
+    end, { nargs = '?', desc = 'Set/clear due date on task under cursor' })
+
+    -- Highlight due dates: overdue = error, today = warn, future = hint.
+    local due_ns = vim.api.nvim_create_namespace 'md_task_due'
+    local function highlight_due(buf)
+      if not vim.api.nvim_buf_is_valid(buf) then
+        return
+      end
+      vim.api.nvim_buf_clear_namespace(buf, due_ns, 0, -1)
+      local today = os.date '%Y-%m-%d'
+      for i, l in ipairs(vim.api.nvim_buf_get_lines(buf, 0, -1, false)) do
+        local s, e, date = l:find(DUE_ICON .. '%s*(%d%d%d%d%-%d%d%-%d%d)')
+        if s and l:match '^%s*[%-%*%+] %[.%] ' then
+          local done = l:match '^%s*[%-%*%+] %[[xX_]%] '
+          local hl = done and 'Comment'
+            or (date < today and 'DiagnosticError')
+            or (date == today and 'DiagnosticWarn')
+            or 'DiagnosticHint'
+          vim.api.nvim_buf_set_extmark(buf, due_ns, i - 1, s - 1, { end_col = e, hl_group = hl })
+        end
+      end
+    end
+    vim.api.nvim_create_autocmd({ 'BufEnter', 'TextChanged', 'InsertLeave' }, {
+      pattern = '*.md',
+      callback = function(ev)
+        highlight_due(ev.buf)
+      end,
+    })
+
+    ---------------------------------------------------------------------------
     -- Task / checkbox keymaps (mirrors Neorg <leader>t* workflow)
     ---------------------------------------------------------------------------
     -- These are set per-buffer for obsidian-managed markdown files.
@@ -1033,6 +1182,8 @@ return {
           vim.keymap.set('n', '<leader>tw', function()
             actions.set_checkbox '~'
           end, { buffer = ev.buf, desc = '[T]ask In-progress / [W]orking' })
+
+          vim.keymap.set('n', '<leader>tD', set_due_date, { buffer = ev.buf, desc = '[T]ask [D]ue date' })
 
           -- Cycle through all states
           vim.keymap.set('n', '<leader>tt', function()
