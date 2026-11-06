@@ -15,6 +15,8 @@ return {
     { '<leader>nw', '<cmd>MdWorknote<CR>', desc = '[N]otes: [W]orknote' },
     { '<leader>nj', '<cmd>MdJournal<CR>', desc = '[N]otes: [J]ournal' },
     { '<leader>nc', '<cmd>MdCarryTasks<CR>', desc = '[N]otes: [C]arry tasks' },
+    { '<leader>na', '<cmd>MdTask<CR>', desc = '[N]otes: [A]dd task (quick capture)' },
+    { '<leader>nA', '<cmd>MdAgenda<CR>', desc = '[N]otes: task [A]genda' },
     { '<leader>nm', '<cmd>MdMeetings<CR>', desc = '[N]otes: [M]eetings' },
     { '<leader>np', '<cmd>MdProject<CR>', desc = '[N]otes: [P]roject' },
     { '<leader>nP', '<cmd>MdLinkProject<CR>', desc = '[N]otes: Link [P]roject to worknote' },
@@ -53,7 +55,7 @@ return {
     'WikiDashboard', 'WikiLint', 'WikiHealth', 'WikiEvaluator',
     'WikiToday', 'WikiSave',
     'MdWorknote', 'MdJournal', 'MdCarryTasks', 'MdMeetings',
-    'MdProject', 'MdAddRepo', 'MdLinkProject', 'MdRetro', 'MdWin', 'MdDue',
+    'MdProject', 'MdAddRepo', 'MdLinkProject', 'MdRetro', 'MdWin', 'MdDue', 'MdTask', 'MdAgenda',
   },
   opts = {
     workspaces = {
@@ -213,156 +215,22 @@ return {
     end
 
     ---------------------------------------------------------------------------
-    -- Helper: find the most recent previous worknote (up to 30 days back)
+    -- Tasks: capture, carry-over, due dates, agenda (see lua/custom/tasks.lua)
     ---------------------------------------------------------------------------
-    local function find_previous_worknote(days_back)
-      days_back = days_back or 1
-      local max_lookback = 30
-
-      for i = days_back, max_lookback do
-        local timestamp = os.time() - (i * 86400)
-        local y = os.date('%Y', timestamp)
-        local m = os.date('%m', timestamp)
-        local d = os.date('%d', timestamp)
-        local filepath = vim.fn.expand('~/notes-md/worknotes/' .. y .. '/' .. m .. '/' .. d .. '.md')
-
-        if vim.fn.filereadable(filepath) == 1 then
-          return filepath, os.date('%Y-%m-%d', timestamp)
-        end
-      end
-      return nil, nil
-    end
+    local tasks = require 'custom.tasks'
+    tasks.setup { load_template = load_template }
 
     ---------------------------------------------------------------------------
-    -- Helper: extract incomplete tasks from a markdown worknote
-    -- Carries over tasks that are NOT [x] (done) or [_] (cancelled)
-    -- Recognized states: [ ] undone, [-] pending, [~] in-progress,
-    --   [!] important, [?] ambiguous, [>] deferred/on-hold
-    ---------------------------------------------------------------------------
-    local function extract_incomplete_tasks(filepath, source_date)
-      local file = io.open(filepath, 'r')
-      if not file then
-        return {}
-      end
-
-      local tasks = {}
-      local in_todo_section = false
-      local in_carried_section = false
-
-      for line in file:lines() do
-        -- Detect sections by ## headings
-        if line:match '^## Todo' then
-          in_todo_section = true
-          in_carried_section = false
-        elseif line:match '^## Carried Over' then
-          in_carried_section = true
-          in_todo_section = false
-        elseif line:match '^## ' then
-          in_todo_section = false
-          in_carried_section = false
-        end
-
-        -- Extract incomplete tasks: anything not [x] (done) or [_] (cancelled)
-        if in_todo_section or in_carried_section then
-          local task_match = line:match '^(%s*%- %[[^xX_]%] .+)'
-          if task_match then
-            -- Remove any existing source-date reference
-            local clean_task = task_match:gsub('%s*%[from %d%d%d%d%-%d%d%-%d%d%]%(.-%)%s*$', '')
-            clean_task = clean_task:gsub('%s*%[from %d%d%d%d%-%d%d%-%d%d%]%s*$', '')
-            -- Remove wiki-link style source references
-            clean_task = clean_task:gsub('%s*%[%[worknotes/%d+/%d+/%d+|from %d%d%d%d%-%d%d%-%d%d%]%]%s*$', '')
-
-            -- Add source date as a wiki link reference
-            local y, m, d = source_date:match '(%d%d%d%d)%-(%d%d)%-(%d%d)'
-            local link = '[[worknotes/' .. y .. '/' .. m .. '/' .. d .. '|from ' .. source_date .. ']]'
-            local task_with_ref = clean_task .. ' ' .. link
-            table.insert(tasks, task_with_ref)
-          end
-        end
-      end
-
-      file:close()
-      return tasks
-    end
-
-    ---------------------------------------------------------------------------
-    -- Helper: insert carried tasks into "Carried Over" section of current buffer
-    ---------------------------------------------------------------------------
-    local function insert_carried_tasks(tasks)
-      if #tasks == 0 then
-        return false
-      end
-
-      local lines = vim.api.nvim_buf_get_lines(0, 0, -1, false)
-      local insert_line = nil
-
-      for i, line in ipairs(lines) do
-        if line:match '^## Carried Over' then
-          -- Find the line after "Tasks from previous day:" or insert after section header
-          for j = i + 1, #lines do
-            if lines[j]:match '^%s*Tasks from previous' then
-              insert_line = j + 1
-              break
-            elseif lines[j]:match '^## ' then
-              -- Next section started, insert before it
-              insert_line = j
-              break
-            end
-          end
-          if not insert_line then
-            insert_line = i + 1
-          end
-          break
-        end
-      end
-
-      if insert_line then
-        vim.api.nvim_buf_set_lines(0, insert_line - 1, insert_line - 1, false, tasks)
-        return true
-      end
-      return false
-    end
-
-    ---------------------------------------------------------------------------
-    -- Command: MdWorknote — Create or open today's worknote
+    -- Command: MdWorknote — Create or open today's worknote (auto-carries
+    -- open tasks from the previous worknote when created)
     ---------------------------------------------------------------------------
     vim.api.nvim_create_user_command('MdWorknote', function()
-      local year = os.date '%Y'
-      local month = os.date '%m'
-      local day = os.date '%d'
-      local dir = vim.fn.expand('~/notes-md/worknotes/' .. year .. '/' .. month)
-      local filepath = dir .. '/' .. day .. '.md'
-
-      -- Create directory if it doesn't exist
-      vim.fn.mkdir(dir, 'p')
-
-      -- If file already exists, just open it
-      if vim.fn.filereadable(filepath) == 1 then
-        vim.cmd('edit ' .. filepath)
-        vim.notify('Opened existing worknote: ' .. filepath, vim.log.levels.INFO)
+      local buf, is_new = tasks.today_buf()
+      if not buf then
         return
       end
-
-      -- Load template and create new file
-      local content = load_template '~/notes-md/templates/worknote.md'
-      if content then
-        vim.cmd('edit ' .. filepath)
-        local lines = vim.split(content, '\n')
-        vim.api.nvim_buf_set_lines(0, 0, -1, false, lines)
-
-        -- Auto-carry incomplete tasks from previous worknote
-        local prev_filepath, prev_date = find_previous_worknote(1)
-        if prev_filepath then
-          local tasks = extract_incomplete_tasks(prev_filepath, prev_date)
-          if #tasks > 0 then
-            insert_carried_tasks(tasks)
-            vim.notify('Carried over ' .. #tasks .. ' task(s) from ' .. prev_date, vim.log.levels.INFO)
-          end
-        end
-
-        vim.cmd 'write'
-        vim.notify('Created new worknote: ' .. filepath, vim.log.levels.INFO)
-      end
+      vim.cmd.buffer(buf)
+      vim.notify((is_new and 'Created new worknote: ' or 'Opened existing worknote: ') .. vim.api.nvim_buf_get_name(buf), vim.log.levels.INFO)
     end, { desc = 'Create or open daily worknote (markdown)' })
 
     ---------------------------------------------------------------------------
@@ -392,32 +260,6 @@ return {
         vim.notify('Created new journal: ' .. filepath, vim.log.levels.INFO)
       end
     end, { desc = 'Create or open daily journal (markdown)' })
-
-    ---------------------------------------------------------------------------
-    -- Command: MdCarryTasks — Manually carry tasks from previous worknote
-    ---------------------------------------------------------------------------
-    vim.api.nvim_create_user_command('MdCarryTasks', function()
-      local prev_filepath, prev_date = find_previous_worknote(1)
-      if not prev_filepath then
-        vim.notify('No previous worknote found (looked back 30 days)', vim.log.levels.WARN)
-        return
-      end
-
-      local tasks = extract_incomplete_tasks(prev_filepath, prev_date)
-      if #tasks == 0 then
-        vim.notify('No incomplete tasks found in ' .. prev_date, vim.log.levels.INFO)
-        return
-      end
-
-      if insert_carried_tasks(tasks) then
-        vim.notify('Carried over ' .. #tasks .. ' task(s) from ' .. prev_date, vim.log.levels.INFO)
-      else
-        -- No "Carried Over" section found, insert at cursor
-        local cursor = vim.api.nvim_win_get_cursor(0)
-        vim.api.nvim_buf_set_lines(0, cursor[1], cursor[1], false, tasks)
-        vim.notify('Inserted ' .. #tasks .. ' task(s) at cursor from ' .. prev_date, vim.log.levels.INFO)
-      end
-    end, { desc = 'Pull incomplete tasks from previous worknote' })
 
     ---------------------------------------------------------------------------
     -- Helper: insert meetings into "Meetings" section of the given buffer
@@ -986,160 +828,9 @@ return {
     ---------------------------------------------------------------------------
 
     ---------------------------------------------------------------------------
-    -- Task due dates — Obsidian Tasks format: `- [ ] task 📅 YYYY-MM-DD`
+    -- Task keymaps (buffer-local, vault markdown). Logic lives in custom.tasks:
+    --   <leader>t{d,u,p,i,q,o,c,w} set state, <leader>tD due, <leader>t> +1 day
     ---------------------------------------------------------------------------
-    local DUE_ICON = '📅'
-    local DUE_PAT = '%s*' .. DUE_ICON .. '%s*%d%d%d%d%-%d%d%-%d%d'
-    local CARRY_LINK_PAT = '%s*%[%[worknotes/%d+/%d+/%d+|from %d%d%d%d%-%d%d%-%d%d%]%]%s*$'
-
-    -- Parse user input into YYYY-MM-DD. Accepts: YYYY-MM-DD, MM-DD, M/D,
-    -- today/tod, tomorrow/tom, +Nd/+Nw/+Nm (or bare N = days), mon..sun.
-    local function parse_due(input)
-      input = vim.trim((input or ''):lower())
-      local now = os.date '*t'
-      local today = { year = now.year, month = now.month, day = now.day, hour = 12 }
-      local function fmt(t)
-        return os.date('%Y-%m-%d', os.time(t))
-      end
-      local function offset(days, months)
-        local t = vim.deepcopy(today)
-        t.day = t.day + (days or 0)
-        t.month = t.month + (months or 0)
-        return fmt(t)
-      end
-
-      if input == 'today' or input == 'tod' then
-        return offset(0)
-      elseif input == 'tomorrow' or input == 'tom' then
-        return offset(1)
-      end
-
-      local n, unit = input:match '^%+?(%d+)([dwm]?)$'
-      if n and not input:match '^%d%d%d%d' then
-        n = tonumber(n)
-        if unit == 'w' then
-          return offset(n * 7)
-        elseif unit == 'm' then
-          return offset(0, n)
-        end
-        return offset(n)
-      end
-
-      local wdays = { sun = 1, mon = 2, tue = 3, wed = 4, thu = 5, fri = 6, sat = 7 }
-      local wd = wdays[input:sub(1, 3)]
-      if wd and input:match '^%a+$' then
-        local diff = (wd - now.wday) % 7
-        return offset(diff == 0 and 7 or diff)
-      end
-
-      local y, m, d = input:match '^(%d%d%d%d)%-(%d%d?)%-(%d%d?)$'
-      if not y then
-        m, d = input:match '^(%d%d?)[%-/](%d%d?)$'
-        if m then
-          y = now.year
-          local t = { year = y, month = tonumber(m), day = tonumber(d), hour = 12 }
-          if os.time(t) < os.time(today) then
-            y = y + 1
-          end
-        end
-      end
-      if y then
-        local t = { year = tonumber(y), month = tonumber(m), day = tonumber(d), hour = 12 }
-        local out = fmt(t)
-        -- Reject overflowed dates like 02-31
-        if tonumber(out:sub(6, 7)) == t.month and tonumber(out:sub(9, 10)) == t.day then
-          return out
-        end
-      end
-      return nil
-    end
-
-    -- Return line with due date set (or removed when date is nil). The due
-    -- field is placed before a trailing carry-over link so carry keeps working.
-    local function apply_due(line, date)
-      line = line:gsub(DUE_PAT, '')
-      if not date then
-        return line
-      end
-      local s = line:find(CARRY_LINK_PAT)
-      local due = ' ' .. DUE_ICON .. ' ' .. date
-      if s then
-        return line:sub(1, s - 1) .. due .. line:sub(s)
-      end
-      return (line:gsub('%s*$', '')) .. due
-    end
-
-    local function set_due_date(arg)
-      local buf = vim.api.nvim_get_current_buf()
-      local row = vim.api.nvim_win_get_cursor(0)[1]
-      local line = vim.api.nvim_buf_get_lines(buf, row - 1, row, false)[1] or ''
-      if not line:match '^%s*[%-%*%+] %[.%] ' then
-        vim.notify('Not a task line', vim.log.levels.WARN)
-        return
-      end
-
-      local function commit(input)
-        if input == nil then
-          return
-        end
-        local date
-        if vim.trim(input) ~= '' and vim.trim(input) ~= '-' then
-          date = parse_due(input)
-          if not date then
-            vim.notify('Unrecognized date: ' .. input, vim.log.levels.ERROR)
-            return
-          end
-        end
-        vim.api.nvim_buf_set_lines(buf, row - 1, row, false, { apply_due(line, date) })
-      end
-
-      if arg and arg ~= '' then
-        return commit(arg)
-      end
-      local current = line:match(DUE_ICON .. '%s*(%d%d%d%d%-%d%d%-%d%d)') or ''
-      vim.ui.input({
-        prompt = 'Due (YYYY-MM-DD, MM-DD, today, tom, +3d, +2w, fri; empty=clear): ',
-        default = current,
-      }, commit)
-    end
-
-    vim.api.nvim_create_user_command('MdDue', function(o)
-      set_due_date(o.args)
-    end, { nargs = '?', desc = 'Set/clear due date on task under cursor' })
-
-    -- Highlight due dates: overdue = error, today = warn, future = hint.
-    local due_ns = vim.api.nvim_create_namespace 'md_task_due'
-    local function highlight_due(buf)
-      if not vim.api.nvim_buf_is_valid(buf) then
-        return
-      end
-      vim.api.nvim_buf_clear_namespace(buf, due_ns, 0, -1)
-      local today = os.date '%Y-%m-%d'
-      for i, l in ipairs(vim.api.nvim_buf_get_lines(buf, 0, -1, false)) do
-        local s, e, date = l:find(DUE_ICON .. '%s*(%d%d%d%d%-%d%d%-%d%d)')
-        if s and l:match '^%s*[%-%*%+] %[.%] ' then
-          local done = l:match '^%s*[%-%*%+] %[[xX_]%] '
-          local hl = done and 'Comment'
-            or (date < today and 'DiagnosticError')
-            or (date == today and 'DiagnosticWarn')
-            or 'DiagnosticHint'
-          vim.api.nvim_buf_set_extmark(buf, due_ns, i - 1, s - 1, { end_col = e, hl_group = hl })
-        end
-      end
-    end
-    vim.api.nvim_create_autocmd({ 'BufEnter', 'TextChanged', 'InsertLeave' }, {
-      pattern = '*.md',
-      callback = function(ev)
-        highlight_due(ev.buf)
-      end,
-    })
-
-    ---------------------------------------------------------------------------
-    -- Task / checkbox keymaps (mirrors Neorg <leader>t* workflow)
-    ---------------------------------------------------------------------------
-    -- These are set per-buffer for obsidian-managed markdown files.
-    -- States: [ ] undone, [-] pending, [~] in-progress, [!] important,
-    --         [?] ambiguous, [>] on-hold/deferred, [_] cancelled, [x] done
     vim.api.nvim_create_autocmd('BufEnter', {
       pattern = '*.md',
       callback = function(ev)
@@ -1147,47 +838,9 @@ return {
           if not vim.b[ev.buf].obsidian_buffer then
             return
           end
-
-          local actions = require 'obsidian.actions'
-
-          -- Direct-set keymaps (like Neorg's individual state keymaps)
-          vim.keymap.set('n', '<leader>td', function()
-            actions.set_checkbox 'x'
-          end, { buffer = ev.buf, desc = '[T]ask [D]one' })
-
-          vim.keymap.set('n', '<leader>tu', function()
-            actions.set_checkbox ' '
-          end, { buffer = ev.buf, desc = '[T]ask [U]ndone' })
-
-          vim.keymap.set('n', '<leader>tp', function()
-            actions.set_checkbox '-'
-          end, { buffer = ev.buf, desc = '[T]ask [P]ending' })
-
-          vim.keymap.set('n', '<leader>ti', function()
-            actions.set_checkbox '!'
-          end, { buffer = ev.buf, desc = '[T]ask [I]mportant' })
-
-          vim.keymap.set('n', '<leader>tq', function()
-            actions.set_checkbox '?'
-          end, { buffer = ev.buf, desc = '[T]ask Uncertain [?]' })
-
-          vim.keymap.set('n', '<leader>to', function()
-            actions.set_checkbox '>'
-          end, { buffer = ev.buf, desc = '[T]ask [O]n Hold / Deferred' })
-
-          vim.keymap.set('n', '<leader>tc', function()
-            actions.set_checkbox '_'
-          end, { buffer = ev.buf, desc = '[T]ask [C]ancelled' })
-
-          vim.keymap.set('n', '<leader>tw', function()
-            actions.set_checkbox '~'
-          end, { buffer = ev.buf, desc = '[T]ask In-progress / [W]orking' })
-
-          vim.keymap.set('n', '<leader>tD', set_due_date, { buffer = ev.buf, desc = '[T]ask [D]ue date' })
-
-          -- Cycle through all states
+          tasks.buffer_keymaps(ev.buf)
           vim.keymap.set('n', '<leader>tt', function()
-            actions.toggle_checkbox()
+            require('obsidian.actions').toggle_checkbox()
           end, { buffer = ev.buf, desc = '[T]ask Cycle [T]oggle' })
         end, 0)
       end,
