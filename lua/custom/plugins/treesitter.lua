@@ -143,13 +143,13 @@ local function configure_textobjects()
 
   local movements = {
     [']f'] = { move.goto_next_start, '@function.outer' },
-    [']c'] = { move.goto_next_start, '@class.outer' },
+    [']k'] = { move.goto_next_start, '@class.outer' },
     [']F'] = { move.goto_next_end, '@function.outer' },
-    [']C'] = { move.goto_next_end, '@class.outer' },
+    [']K'] = { move.goto_next_end, '@class.outer' },
     ['[f'] = { move.goto_previous_start, '@function.outer' },
-    ['[c'] = { move.goto_previous_start, '@class.outer' },
+    ['[k'] = { move.goto_previous_start, '@class.outer' },
     ['[F'] = { move.goto_previous_end, '@function.outer' },
-    ['[C'] = { move.goto_previous_end, '@class.outer' },
+    ['[K'] = { move.goto_previous_end, '@class.outer' },
   }
   for key, movement in pairs(movements) do
     local action = movement[1]

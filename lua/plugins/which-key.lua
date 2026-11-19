@@ -49,6 +49,7 @@ return {
       { '<leader>h', group = 'Git [H]unk', mode = { 'n', 'v' } },
       { '<leader>g', group = '[G]it / GitHub', mode = { 'n', 'x' } },
       { '<leader>gv', group = 'Diff[v]iew', mode = { 'n', 'x' } },
+      { '<leader>o', group = 'Review / [O]cto', mode = { 'n', 'x' } },
       { '<leader>G', group = '[G]ist', mode = { 'n', 'v' } },
     },
   },

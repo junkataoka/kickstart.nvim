@@ -1,0 +1,91 @@
+#!/usr/bin/env bash
+# Draft GitHub PR review comments into the viewer's PENDING review, so they
+# show up in nvim via `:Octo review` (resume) and are only published when you
+# submit. Used by the Copilot CLI review pane (lua/util/pr_review.lua).
+#
+#   pr-review-draft comment <pr> <path> <line> [start_line] < body
+#   pr-review-draft summary <pr> < body        # draft the review's top-level body
+#   pr-review-draft status  <pr>               # list drafted comments + summary
+#   pr-review-draft discard <pr>               # delete the pending review + summary
+#   pr-review-draft summary-path <pr>          # print the summary file path
+#
+# <pr> is a number (repo = cwd) or a PR URL. Lines are RIGHT-side (new file)
+# line numbers and must fall inside the PR diff hunks.
+# The summary is kept locally (GitHub can't set a body on a pending review
+# created without one, and octo's submit window overwrites it anyway); nvim
+# prefills octo's submit window from it.
+set -euo pipefail
+
+die() { echo "pr-review-draft: $*" >&2; exit 1; }
+[ $# -ge 2 ] || { sed -n '2,17p' "$0" | sed 's/^# \{0,1\}//'; exit 64; }
+cmd=$1 pr=$2; shift 2
+
+url=$(gh pr view "$pr" --json url -q .url) || die "PR $pr not found"
+read -r owner repo number < <(sed -E 's#https://[^/]+/([^/]+)/([^/]+)/pull/([0-9]+).*#\1 \2 \3#' <<<"$url")
+summary_file="${XDG_STATE_HOME:-$HOME/.local/state}/pr-review/${owner}_${repo}_${number}.md"
+
+gql() { gh api graphql "$@"; }
+
+pending_review() { # prints "<pr_node_id> <review_id or empty>"
+  gql -f o="$owner" -f r="$repo" -F n="$number" -f query='
+    query($o:String!,$r:String!,$n:Int!){repository(owner:$o,name:$r){pullRequest(number:$n){
+      id reviews(states:PENDING,first:20){nodes{id viewerDidAuthor}}}}}' \
+    -q '.data.repository.pullRequest | "\(.id) \([.reviews.nodes[] | select(.viewerDidAuthor) | .id][0] // "")"'
+}
+
+ensure_review() {
+  local pr_id review_id
+  read -r pr_id review_id < <(pending_review)
+  if [ -z "$review_id" ]; then
+    review_id=$(gql -f pr="$pr_id" -f query='
+      mutation($pr:ID!){addPullRequestReview(input:{pullRequestId:$pr}){pullRequestReview{id}}}' \
+      -q .data.addPullRequestReview.pullRequestReview.id)
+  fi
+  [ -n "$review_id" ] || die "could not create pending review"
+  echo "$review_id"
+}
+
+case $cmd in
+  comment)
+    [ $# -ge 2 ] || die "usage: comment <pr> <path> <line> [start_line] < body"
+    path=$1 line=$2 start=${3:-}
+    body=$(cat); [ -n "$body" ] || die "empty body on stdin"
+    rid=$(ensure_review)
+    args=(-f rid="$rid" -f path="$path" -F line="$line" -f body="$body")
+    if [ -n "$start" ] && [ "$start" != "$line" ]; then
+      args+=(-F start="$start")
+      q='mutation($rid:ID!,$path:String!,$line:Int!,$start:Int!,$body:String!){addPullRequestReviewThread(input:{
+        pullRequestReviewId:$rid,path:$path,line:$line,side:RIGHT,startLine:$start,startSide:RIGHT,body:$body}){thread{id}}}'
+    else
+      q='mutation($rid:ID!,$path:String!,$line:Int!,$body:String!){addPullRequestReviewThread(input:{
+        pullRequestReviewId:$rid,path:$path,line:$line,side:RIGHT,body:$body}){thread{id}}}'
+    fi
+    out=$(gql "${args[@]}" -f query="$q" 2>&1) || die "$out"
+    grep -q '"thread":{"id"' <<<"$out" || die "comment not added (line outside diff?): $out"
+    echo "drafted: $path:${start:+$start-}$line"
+    ;;
+  summary)
+    body=$(cat); [ -n "$body" ] || die "empty body on stdin"
+    mkdir -p "$(dirname "$summary_file")"
+    printf '%s\n' "$body" > "$summary_file"
+    echo "summary drafted: $summary_file"
+    ;;
+  summary-path) echo "$summary_file" ;;
+  status)
+    [ -s "$summary_file" ] && { echo "summary:"; sed 's/^/  /' "$summary_file"; }
+    read -r _ rid < <(pending_review)
+    [ -n "$rid" ] || { echo "no pending review"; exit 0; }
+    gql -f rid="$rid" -f query='
+      query($rid:ID!){node(id:$rid){... on PullRequestReview{comments(first:100){nodes{path line startLine body}}}}}' \
+      -q '.data.node.comments.nodes[] | "\(.path):\(if .startLine then "\(.startLine)-" else "" end)\(.line)  \(.body | split("\n")[0])"'
+    ;;
+  discard)
+    rm -f "$summary_file"
+    read -r _ rid < <(pending_review)
+    [ -n "$rid" ] || { echo "no pending review"; exit 0; }
+    gql -f rid="$rid" -f query='
+      mutation($rid:ID!){deletePullRequestReview(input:{pullRequestReviewId:$rid}){pullRequestReview{id}}}' >/dev/null
+    echo "discarded"
+    ;;
+  *) die "unknown command: $cmd" ;;
+esac

@@ -835,7 +835,7 @@ return {
       pattern = '*.md',
       callback = function(ev)
         vim.defer_fn(function()
-          if not vim.b[ev.buf].obsidian_buffer then
+          if not vim.api.nvim_buf_is_valid(ev.buf) or not vim.b[ev.buf].obsidian_buffer then
             return
           end
           tasks.buffer_keymaps(ev.buf)
@@ -914,7 +914,7 @@ return {
       callback = function(ev)
         -- Only apply in obsidian-managed buffers (set by obsidian.nvim on BufEnter)
         vim.defer_fn(function()
-          if not vim.b[ev.buf].obsidian_buffer then
+          if not vim.api.nvim_buf_is_valid(ev.buf) or not vim.b[ev.buf].obsidian_buffer then
             return
           end
 
