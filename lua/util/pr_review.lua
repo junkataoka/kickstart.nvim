@@ -80,6 +80,8 @@ function M.copilot_cmd(prompt, mode)
     'copilot',
     mode or '-i',
     prompt,
+    '--model',
+    vim.g.pr_review_copilot_model or 'claude-opus-5.5',
     '--add-dir',
     M.script_dir,
     '--allow-tool',
@@ -94,8 +96,9 @@ local function tmux_pane_alive(id)
 end
 
 ---Open Copilot CLI with a prompt: tmux split when inside tmux, else :terminal.
----Copilot runs without GH_TOKEN/proxy so it authenticates with its own login
----(never the repo's gh account, e.g. stargate) and talks to the API directly;
+---Copilot runs without GH_TOKEN/proxy, authenticated as the work account via
+---COPILOT_GITHUB_TOKEN (never the repo's gh account, e.g. stargate, whose org
+---policy overrides the model) and talks to the API directly;
 ---the scripts/gh shim re-applies the repo's token/proxy from PR_REVIEW_*.
 function M.open_copilot(prompt)
   -- tmux ignores `-e PATH=`, so set PATH via env(1) for both backends
@@ -105,7 +108,12 @@ function M.open_copilot(prompt)
   end
   table.insert(cmd, 'PATH=' .. M.script_dir .. ':' .. vim.env.PATH)
   vim.list_extend(cmd, M.copilot_cmd(prompt))
-  local env = { PR_REVIEW_GH_TOKEN = vim.env.GH_TOKEN, PR_REVIEW_HTTPS_PROXY = require('util.gh_account').proxy }
+  local gh_account = require 'util.gh_account'
+  local env = {
+    COPILOT_GITHUB_TOKEN = gh_account.token(vim.g.pr_review_copilot_user or gh_account.WORK_USER),
+    PR_REVIEW_GH_TOKEN = vim.env.GH_TOKEN,
+    PR_REVIEW_HTTPS_PROXY = gh_account.proxy,
+  }
   if vim.env.TMUX then
     local args = { 'tmux', 'split-window', '-h', '-l', '45%', '-P', '-F', '#{pane_id}', '-c', vim.fn.getcwd() }
     for k, v in pairs(env) do

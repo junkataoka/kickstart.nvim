@@ -9,6 +9,7 @@ local M = {}
 
 local PERSONAL_USER = 'junkataoka'
 local WORK_USER = 'junkataoka_microsoft'
+M.WORK_USER = WORK_USER
 local OWNER_USER = {
   [PERSONAL_USER] = PERSONAL_USER,
   aicdevelopment = 'ext-jun-kataoka-1_stargate',
@@ -25,7 +26,7 @@ local function owner_of(url)
   return url:match('github%.com[:/]([^/]+)/')
 end
 
-local function token(user)
+function M.token(user)
   if tokens[user] == nil then
     local tok = user == PERSONAL_USER and vim.env.GITHUB_PAT_PERSONAL or nil
     if not tok or tok == '' then
@@ -52,7 +53,7 @@ function M.update()
     M.account = 'default'
   else
     user = user or WORK_USER
-    vim.env.GH_TOKEN = token(user) or original
+    vim.env.GH_TOKEN = M.token(user) or original
     M.account = user
   end
   M.proxy = owner and git_proxy(owner) or nil
