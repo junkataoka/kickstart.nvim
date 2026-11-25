@@ -214,6 +214,9 @@ function M.patch_octo()
     OctoBuffer._pr_review_patched = true
   end
 
+  -- custom octo action, bound via mappings.review_diff in the octo spec
+  require('octo.mappings').pr_review_delete_comment = M.delete_comment_at_cursor
+
   local okr, reviews = pcall(require, 'octo.reviews')
   if okr and reviews.Review and not reviews.Review._pr_review_patched then
     local Review = reviews.Review
@@ -229,6 +232,27 @@ function M.patch_octo()
         vim.api.nvim_buf_set_lines(0, 0, -1, false, vim.fn.readfile(f))
         vim.cmd 'normal! G'
       end
+      if self.id ~= -1 and vim.bo.syntax == 'octo' then
+        -- ,A/,C/,R are normal-mode only; <C-s> works while still typing the body
+        local review = self
+        vim.keymap.set({ 'n', 'i' }, '<C-s>', function()
+          vim.cmd 'stopinsert'
+          local win = vim.api.nvim_get_current_win()
+          local events = { 'APPROVE', 'COMMENT', 'REQUEST_CHANGES' }
+          local labels = { APPROVE = 'Approve', COMMENT = 'Comment', REQUEST_CHANGES = 'Request changes' }
+          vim.ui.select(events, {
+            prompt = 'Submit review',
+            format_item = function(e)
+              return labels[e]
+            end,
+          }, function(event)
+            if event and vim.api.nvim_win_is_valid(win) then
+              vim.api.nvim_set_current_win(win)
+              review:submit(event)
+            end
+          end)
+        end, { buffer = 0, desc = 'submit review (approve/comment/request changes)' })
+      end
     end
     Review.submit = function(self, ...)
       local f = path_of(self)
@@ -241,6 +265,51 @@ function M.patch_octo()
     end
     Review._pr_review_patched = true
   end
+end
+
+---<localleader>cd in a review diff buffer: octo only maps delete in the thread
+---buffer, so jump into the thread at the cursor and delete your comment there
+---(asks which one when several are deletable).
+function M.delete_comment_at_cursor()
+  local name = vim.api.nvim_buf_get_name(0)
+  if name:match '^octo://.*/threads/' then
+    return require('octo.commands').delete_comment()
+  end
+  if not require('octo.utils').in_diff_window() or not require('octo.reviews').get_current_review() then
+    return notify('not in an active review diff', vim.log.levels.WARN)
+  end
+  require('octo.reviews.thread-panel').show_review_threads(true)
+  local buffer = require('octo.utils').get_current_buffer()
+  if not buffer or not vim.api.nvim_buf_get_name(0):match '/threads/' then
+    return notify('no review thread on this line', vim.log.levels.WARN)
+  end
+  local review = require('octo.reviews').get_current_review()
+  local mine = vim.tbl_filter(function(c)
+    return c.viewerCanDelete and c.kind == 'PullRequestReviewComment'
+  end, buffer.commentsMetadata or {})
+  table.sort(mine, function(a, b) -- pending (current review) comments first
+    return (review and a.reviewId == review.id and 0 or 1) < (review and b.reviewId == review.id and 0 or 1)
+  end)
+  local function delete(c)
+    buffer:navigate_to_comment { id = c.id }
+    require('octo.commands').delete_comment()
+  end
+  if #mine == 0 then
+    return notify('no deletable comment in this thread', vim.log.levels.WARN)
+  elseif #mine == 1 then
+    return delete(mine[1])
+  end
+  vim.ui.select(mine, {
+    prompt = 'Delete which comment?',
+    format_item = function(c)
+      local pending = review and c.reviewId == review.id and '[pending] ' or ''
+      return pending .. (vim.split(vim.trim(c.body or ''), '\n')[1] or ''):sub(1, 80)
+    end,
+  }, function(c)
+    if c then
+      delete(c)
+    end
+  end)
 end
 
 function M.setup()

@@ -9,6 +9,15 @@ return {
   },
   cmd = 'Octo',
   init = function()
+    -- octo:// buffers are remote views; swap files only cause E325 when the same
+    -- PR is opened in a second nvim (or after a crash) and abort octo's render.
+    vim.api.nvim_create_autocmd({ 'BufNew', 'BufFilePost' }, {
+      group = vim.api.nvim_create_augroup('OctoNoSwap', { clear = true }),
+      pattern = { 'octo://*', '*/octo/null' }, -- octo/null = octo's "Loading..." placeholder
+      callback = function(ev)
+        vim.bo[ev.buf].swapfile = false
+      end,
+    })
     require('util.pr_review').setup()
   end,
   config = function()
@@ -38,6 +47,11 @@ return {
           comment_review = { lhs = '<localleader>C', desc = 'comment review', mode = { 'n' } },
           request_changes = { lhs = '<localleader>R', desc = 'request changes', mode = { 'n' } },
           close_review_tab = { lhs = '<C-c>', desc = 'close review tab', mode = { 'n' } },
+        },
+        -- octo only binds delete in the thread buffer; this works from the diff
+        -- line (util/pr_review.lua registers the action)
+        review_diff = {
+          pr_review_delete_comment = { lhs = '<localleader>cd', desc = 'delete my comment on this line' },
         },
       },
     }
