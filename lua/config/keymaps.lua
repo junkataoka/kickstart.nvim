@@ -40,10 +40,35 @@ vim.keymap.set('t', '<Esc><Esc>', '<C-\\><C-n>', { desc = 'Exit terminal mode' }
 -- Window navigation: <C-hjkl> come from vim-tmux-navigator (crosses into tmux panes)
 
 -- Window resizing
-vim.keymap.set('n', '<leader>wl', ':vertical resize -20<CR>', { silent = true, desc = 'Decrease window width' })
-vim.keymap.set('n', '<leader>wh', ':vertical resize +20<CR>', { silent = true, desc = 'Increase window width' })
-vim.keymap.set('n', '<leader>wj', ':resize -20<CR>', { silent = true, desc = 'Decrease window height' })
-vim.keymap.set('n', '<leader>wk', ':resize +20<CR>', { silent = true, desc = 'Increase window height' })
+-- Like tmux `prefix C-hjkl` (bind -r): <leader>w{hjkl} moves the split border in
+-- that direction, then bare h/j/k/l keep resizing until 600ms idle or another key.
+local function resize_border(dir)
+  local horiz = dir == 'h' or dir == 'l'
+  local has_next = vim.fn.winnr(horiz and 'l' or 'j') ~= vim.fn.winnr()
+  local grow = (dir == 'l' or dir == 'j') == has_next
+  local step = horiz and 15 or 7
+  vim.cmd((horiz and 'vertical ' or '') .. 'resize ' .. (grow and '+' or '-') .. step)
+end
+
+local function resize_mode(dir)
+  return function()
+    resize_border(dir)
+    while true do
+      vim.cmd.redraw()
+      if not vim.wait(600, function() return vim.fn.getchar(1) ~= 0 end, 10) then return end
+      local c = vim.fn.getcharstr()
+      if not c:match('^[hjkl]$') then
+        vim.api.nvim_feedkeys(c, 'm', false)
+        return
+      end
+      resize_border(c)
+    end
+  end
+end
+
+for _, d in ipairs { 'h', 'j', 'k', 'l' } do
+  vim.keymap.set('n', '<leader>w' .. d, resize_mode(d), { desc = 'Resize: move border ' .. ({ h = 'left', j = 'down', k = 'up', l = 'right' })[d] .. ' (repeatable)' })
+end
 
 -- Increment number
 vim.keymap.set('n', '<C-s>', '<C-a>', { desc = 'Increment number' })
