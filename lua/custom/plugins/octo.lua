@@ -18,9 +18,9 @@ return {
       default_merge_method = 'squash',
       picker = 'snacks',
       -- octo spawns gh with a whitelisted env that drops GH_TOKEN; pass it
-      -- through so util/gh_account's per-repo (personal vs work) token applies.
+      -- through (plus HTTPS_PROXY) so util/gh_account's per-repo account applies.
       gh_env = function()
-        return { GH_TOKEN = vim.env.GH_TOKEN }
+        return { GH_TOKEN = vim.env.GH_TOKEN, HTTPS_PROXY = vim.env.HTTPS_PROXY }
       end,
       use_local_fs = true, -- right side of review diffs = real files (LSP, gitsigns, gd work)
       suppress_missing_scope = { projects_v2 = true },

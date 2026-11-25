@@ -99,8 +99,10 @@ function M.open_copilot(prompt)
   local cmd = vim.list_extend({ 'env', 'PATH=' .. M.script_dir .. ':' .. vim.env.PATH }, M.copilot_cmd(prompt))
   if vim.env.TMUX then
     local args = { 'tmux', 'split-window', '-h', '-l', '45%', '-P', '-F', '#{pane_id}', '-c', vim.fn.getcwd() }
-    if vim.env.GH_TOKEN then
-      vim.list_extend(args, { '-e', 'GH_TOKEN=' .. vim.env.GH_TOKEN })
+    for _, k in ipairs { 'GH_TOKEN', 'HTTPS_PROXY' } do
+      if vim.env[k] then
+        vim.list_extend(args, { '-e', k .. '=' .. vim.env[k] })
+      end
     end
     vim.list_extend(args, cmd)
     local out = vim.fn.system(args)
