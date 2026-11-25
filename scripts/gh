@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# gh shim for the Copilot review pane (scripts/ is prepended to PATH there only).
+# Copilot itself runs without GH_TOKEN/proxy so it uses its own login; gh calls
+# get the repo's account and proxy from PR_REVIEW_* (set by lua/util/pr_review.lua).
+set -euo pipefail
+self_dir=$(cd "$(dirname "$0")" && pwd)
+real=
+IFS=: read -ra dirs <<<"$PATH"
+for d in "${dirs[@]}"; do
+  [ "$(cd "$d" 2>/dev/null && pwd)" = "$self_dir" ] && continue
+  [ -x "$d/gh" ] && { real="$d/gh"; break; }
+done
+[ -n "$real" ] || { echo "gh shim: real gh not found" >&2; exit 127; }
+[ -n "${PR_REVIEW_GH_TOKEN:-}" ] && export GH_TOKEN=$PR_REVIEW_GH_TOKEN
+[ -n "${PR_REVIEW_HTTPS_PROXY:-}" ] && export HTTPS_PROXY=$PR_REVIEW_HTTPS_PROXY
+exec "$real" "$@"

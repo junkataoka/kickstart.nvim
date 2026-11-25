@@ -20,7 +20,7 @@ return {
       -- octo spawns gh with a whitelisted env that drops GH_TOKEN; pass it
       -- through (plus HTTPS_PROXY) so util/gh_account's per-repo account applies.
       gh_env = function()
-        return { GH_TOKEN = vim.env.GH_TOKEN, HTTPS_PROXY = vim.env.HTTPS_PROXY }
+        return { GH_TOKEN = vim.env.GH_TOKEN, HTTPS_PROXY = require('util.gh_account').proxy }
       end,
       use_local_fs = true, -- right side of review diffs = real files (LSP, gitsigns, gd work)
       suppress_missing_scope = { projects_v2 = true },

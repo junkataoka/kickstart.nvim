@@ -94,15 +94,22 @@ local function tmux_pane_alive(id)
 end
 
 ---Open Copilot CLI with a prompt: tmux split when inside tmux, else :terminal.
+---Copilot runs without GH_TOKEN/proxy so it authenticates with its own login
+---(never the repo's gh account, e.g. stargate) and talks to the API directly;
+---the scripts/gh shim re-applies the repo's token/proxy from PR_REVIEW_*.
 function M.open_copilot(prompt)
   -- tmux ignores `-e PATH=`, so set PATH via env(1) for both backends
-  local cmd = vim.list_extend({ 'env', 'PATH=' .. M.script_dir .. ':' .. vim.env.PATH }, M.copilot_cmd(prompt))
+  local cmd = { 'env' }
+  for _, k in ipairs { 'GH_TOKEN', 'GITHUB_TOKEN', 'HTTPS_PROXY', 'https_proxy', 'HTTP_PROXY', 'http_proxy' } do
+    vim.list_extend(cmd, { '-u', k })
+  end
+  table.insert(cmd, 'PATH=' .. M.script_dir .. ':' .. vim.env.PATH)
+  vim.list_extend(cmd, M.copilot_cmd(prompt))
+  local env = { PR_REVIEW_GH_TOKEN = vim.env.GH_TOKEN, PR_REVIEW_HTTPS_PROXY = require('util.gh_account').proxy }
   if vim.env.TMUX then
     local args = { 'tmux', 'split-window', '-h', '-l', '45%', '-P', '-F', '#{pane_id}', '-c', vim.fn.getcwd() }
-    for _, k in ipairs { 'GH_TOKEN', 'HTTPS_PROXY' } do
-      if vim.env[k] then
-        vim.list_extend(args, { '-e', k .. '=' .. vim.env[k] })
-      end
+    for k, v in pairs(env) do
+      vim.list_extend(args, { '-e', k .. '=' .. v })
     end
     vim.list_extend(args, cmd)
     local out = vim.fn.system(args)
@@ -112,7 +119,7 @@ function M.open_copilot(prompt)
     M.pane = { tmux = vim.trim(out) }
   else
     vim.cmd 'botright vnew'
-    local chan = vim.fn.jobstart(cmd, { term = true })
+    local chan = vim.fn.jobstart(cmd, { term = true, env = env })
     M.pane = { chan = chan, buf = vim.api.nvim_get_current_buf() }
     vim.cmd.startinsert()
   end

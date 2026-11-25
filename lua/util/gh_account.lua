@@ -2,8 +2,9 @@
 -- :terminal, git push via `gh auth git-credential`).
 -- gh's active account can be any of several logins, each of which 404s on the
 -- others' repos, so pin GH_TOKEN by repo owner. Orgs behind an IP allow list
--- also need the per-URL git proxy (`http.<url>.proxy` in ~/.gitconfig) exported
--- as HTTPS_PROXY, since gh ignores git's proxy config.
+-- also need the per-URL git proxy (`http.<url>.proxy` in ~/.gitconfig) for gh,
+-- which ignores git's proxy config. It's kept in M.proxy (not exported) so only
+-- gh consumers (octo gh_env, the review pane) use it, not Copilot/LSPs.
 local M = {}
 
 local PERSONAL_USER = 'junkataoka'
@@ -14,7 +15,7 @@ local OWNER_USER = {
   ['ai-partner'] = 'ext-jun-kataoka-1_stargate',
   ['digital-cockpit'] = 'ext-jun-kataoka-1_stargate',
 }
-local original = { token = vim.env.GH_TOKEN, proxy = vim.env.HTTPS_PROXY }
+local original = vim.env.GH_TOKEN
 local tokens = {}
 
 local function owner_of(url)
@@ -46,15 +47,15 @@ function M.update()
   local r = vim.system({ 'git', 'remote', 'get-url', 'origin' }, { text = true, cwd = vim.fn.getcwd() }):wait()
   local owner = r.code == 0 and owner_of(vim.trim(r.stdout)) or nil
   local user = owner and OWNER_USER[owner]
-  if not user and original.token and original.token ~= '' then
-    vim.env.GH_TOKEN = original.token
+  if not user and original and original ~= '' then
+    vim.env.GH_TOKEN = original
     M.account = 'default'
   else
     user = user or WORK_USER
-    vim.env.GH_TOKEN = token(user) or original.token
+    vim.env.GH_TOKEN = token(user) or original
     M.account = user
   end
-  vim.env.HTTPS_PROXY = (owner and git_proxy(owner)) or original.proxy
+  M.proxy = owner and git_proxy(owner) or nil
 end
 
 function M.setup()
