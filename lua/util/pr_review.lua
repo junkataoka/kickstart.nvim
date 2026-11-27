@@ -187,6 +187,23 @@ function M.draft_status()
 end
 
 ---Patch octo: dupe-save guard, summary prefill/cleanup.
+-- Soft-wrap long lines in review diff windows (vim.g.pr_review_wrap, default on).
+function M.apply_wrap()
+  local on = vim.g.pr_review_wrap ~= false
+  for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+    if vim.wo[win].diff then
+      vim.wo[win].wrap = on
+      vim.wo[win].linebreak = on
+    end
+  end
+end
+
+function M.toggle_wrap()
+  vim.g.pr_review_wrap = vim.g.pr_review_wrap == false
+  M.apply_wrap()
+  notify('diff wrap ' .. (vim.g.pr_review_wrap and 'on' or 'off'))
+end
+
 function M.patch_octo()
   -- octo.nvim#323: repeated :w before the create callback returns re-creates
   -- the same new comment (id stays -1 until the async callback). Skip the
@@ -212,6 +229,18 @@ function M.patch_octo()
       return save(self)
     end
     OctoBuffer._pr_review_patched = true
+  end
+
+  -- :diffthis forces 'nowrap'; re-apply wrap to the review diff windows.
+  local okf, fe = pcall(require, 'octo.reviews.file-entry')
+  if okf and fe.FileEntry and not fe.FileEntry._pr_review_wrap_patched then
+    local show_diff = fe.FileEntry.show_diff
+    fe.FileEntry.show_diff = function(self, ...)
+      local r = show_diff(self, ...)
+      M.apply_wrap()
+      return r
+    end
+    fe.FileEntry._pr_review_wrap_patched = true
   end
 
   -- custom octo action, bound via mappings.review_diff in the octo spec
@@ -330,6 +359,7 @@ function M.setup()
   map('<leader>oa', M.copilot_review, 'Copilot: draft review ([a]gent)')
   map('<leader>oq', M.ask_copilot, 'Copilot: ask about line/selection', { 'n', 'x' })
   map('<leader>oi', M.draft_status, 'Review: drafted comments [i]nfo')
+  map('<leader>ow', M.toggle_wrap, 'Review: toggle diff [w]rap')
 end
 
 return M
