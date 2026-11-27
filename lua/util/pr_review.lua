@@ -231,6 +231,29 @@ function M.patch_octo()
     OctoBuffer._pr_review_patched = true
   end
 
+  -- which-key scans a buffer's maps on BufEnter, but octo sets its <localleader>
+  -- maps after entering, so `,` gets no which-key trigger and a pause > timeoutlen
+  -- after `,` runs the next key raw (`,A` -> append). Rescan after octo maps.
+  local oku, ou = pcall(require, 'octo.utils')
+  if oku and not ou._pr_review_wk_patched then
+    local apply = ou.apply_mappings
+    ou.apply_mappings = function(kind, bufnr, ...)
+      local r = apply(kind, bufnr, ...)
+      local buf = (bufnr == nil or bufnr == 0) and vim.api.nvim_get_current_buf() or bufnr
+      vim.schedule(function()
+        local okw, wkbuf = pcall(require, 'which-key.buf')
+        if okw and vim.api.nvim_buf_is_valid(buf) then
+          wkbuf.clear { buf = buf }
+          if buf == vim.api.nvim_get_current_buf() then
+            wkbuf.get { buf = buf }
+          end
+        end
+      end)
+      return r
+    end
+    ou._pr_review_wk_patched = true
+  end
+
   -- :diffthis forces 'nowrap'; re-apply wrap to the review diff windows.
   local okf, fe = pcall(require, 'octo.reviews.file-entry')
   if okf and fe.FileEntry and not fe.FileEntry._pr_review_wrap_patched then
